@@ -1,0 +1,21 @@
+# Render Blueprint — Face Auth Backend
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: face-auth-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    rootDir: backend
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        generateValue: true
+      - key: PYTHON_VERSION
+        value: "3.11.0"

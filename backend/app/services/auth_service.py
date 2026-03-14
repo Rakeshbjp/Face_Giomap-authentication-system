@@ -1,0 +1,374 @@
+"""
+Authentication service handling user registration, login, and token management.
+"""
+
+import logging
+import math
+from datetime import datetime, timedelta
+from typing import Optional, Tuple
+
+import bcrypt
+import jwt  # type: ignore[import-untyped]
+from bson import ObjectId
+
+from app.config.settings import get_settings
+from app.models.user import UserDocument
+from app.services.face_recognition import face_service
+from app.utils.encryption import encrypt_embeddings, decrypt_embeddings
+
+logger = logging.getLogger(__name__)
+settings = get_settings()
+
+# Maximum distance (in metres) between registered and login locations
+LOCATION_RADIUS_M = 1000  # 1 km
+
+
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """
+    Calculate the great-circle distance between two GPS points (in metres).
+    Uses the Haversine formula.
+    """
+    R = 6_371_000  # Earth radius in metres
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+
+    a = (
+        math.sin(d_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    )
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+class AuthService:
+    """Service handling authentication operations."""
+
+    def __init__(self, db):
+        self.db = db
+        self.users_collection = db["users"]
+
+    # ──────────────────────────────────────────────
+    #  User Lookup Helpers
+    # ──────────────────────────────────────────────
+
+    async def resolve_user_id(self, identifier: str) -> Optional[str]:
+        """
+        Resolve a user identifier (ObjectId string OR email) to an ObjectId string.
+        Returns the ObjectId string if found, else None.
+        """
+        # If it looks like a valid ObjectId, use it directly
+        if ObjectId.is_valid(identifier):
+            user = await self.users_collection.find_one({"_id": ObjectId(identifier)}, {"_id": 1})
+            if user:
+                return str(user["_id"])
+
+        # Otherwise, try to find the user by email
+        user = await self.users_collection.find_one({"email": identifier.strip().lower()}, {"_id": 1})
+        if user:
+            return str(user["_id"])
+
+        return None
+
+    # ──────────────────────────────────────────────
+    #  Password Utilities
+    # ──────────────────────────────────────────────
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Hash a password using bcrypt."""
+        salt = bcrypt.gensalt(rounds=12)
+        return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+
+    @staticmethod
+    def verify_password(password: str, hashed: str) -> bool:
+        """Verify a password against its bcrypt hash."""
+        return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+
+    # ──────────────────────────────────────────────
+    #  JWT Token Utilities
+    # ──────────────────────────────────────────────
+
+    @staticmethod
+    def create_access_token(user_id: str, email: str) -> str:
+        """Generate a JWT access token."""
+        payload = {
+            "sub": user_id,
+            "email": email,
+            "type": "access",
+            "exp": datetime.utcnow() + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES),
+            "iat": datetime.utcnow(),
+        }
+        return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+    @staticmethod
+    def create_refresh_token(user_id: str) -> str:
+        """Generate a JWT refresh token."""
+        payload = {
+            "sub": user_id,
+            "type": "refresh",
+            "exp": datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS),
+            "iat": datetime.utcnow(),
+        }
+        return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+    @staticmethod
+    def decode_token(token: str) -> Optional[dict]:
+        """Decode and validate a JWT token."""
+        try:
+            payload = jwt.decode(
+                token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+            )
+            return payload
+        except jwt.ExpiredSignatureError:
+            logger.warning("Token has expired")
+            return None
+        except jwt.InvalidTokenError as e:
+            logger.warning(f"Invalid token: {e}")
+            return None
+
+    # ──────────────────────────────────────────────
+    #  User Registration
+    # ──────────────────────────────────────────────
+
+    async def register_user(
+        self,
+        name: str,
+        email: str,
+        phone: str,
+        password: str,
+        face_images: list,
+        location: Optional[dict] = None,
+    ) -> Tuple[bool, str, Optional[str]]:
+        """
+        Register a new user, optionally with face recognition.
+
+        If face_images is empty (no camera available), the user is registered
+        with password-only authentication.  Face data can be added later.
+
+        Args:
+            name: Full name.
+            email: Email address.
+            phone: Phone number.
+            password: Plain-text password.
+            face_images: List of base64-encoded face images (can be empty).
+
+        Returns:
+            Tuple of (success, message, user_id or None).
+        """
+        try:
+            # Check for existing user
+            existing = await self.users_collection.find_one(
+                {"$or": [{"email": email}, {"phone": phone}]}
+            )
+            if existing:
+                if existing.get("email") == email:
+                    return False, "Email already registered", None
+                return False, "Phone number already registered", None
+
+            # Hash password
+            password_hash = self.hash_password(password)
+
+            encrypted_embeddings = []
+            liveness_verified = False
+            has_face_data = len(face_images) >= 4
+
+            if has_face_data:
+                # Perform liveness detection
+                logger.info("Performing liveness detection...")
+                is_live, liveness_msg = face_service.perform_liveness_check(face_images)
+                if not is_live:
+                    return False, f"Liveness verification failed: {liveness_msg}", None
+
+                # Extract face embeddings from all 4 directions
+                logger.info("Extracting face embeddings...")
+                embeddings, errors = face_service.extract_multiple_embeddings(face_images)
+
+                if errors:
+                    return False, f"Face registration failed: {'; '.join(errors)}", None
+
+                if len(embeddings) < 4:
+                    return False, "Could not extract embeddings from all 4 face images", None
+
+                # Encrypt embeddings before storage
+                encrypted_embeddings = encrypt_embeddings(embeddings)
+                liveness_verified = True
+            else:
+                logger.info("Registering user without face data (no camera available)")
+
+            # Create user document
+            user_doc = {
+                "name": name,
+                "email": email,
+                "phone": phone,
+                "password_hash": password_hash,
+                "face_embeddings": encrypted_embeddings,
+                "registered_location": location,
+                "liveness_verified": liveness_verified,
+                "created_at": datetime.utcnow(),
+                "updated_at": datetime.utcnow(),
+            }
+
+            result = await self.users_collection.insert_one(user_doc)
+            user_id = str(result.inserted_id)
+
+            msg = "Registration successful"
+            if not has_face_data:
+                msg += " (without face data — you can add it later)"
+
+            logger.info(f"User registered successfully: {user_id} (face_data={has_face_data})")
+            return True, msg, user_id
+
+        except Exception as e:
+            logger.error(f"Registration failed: {e}")
+            return False, f"Registration failed: {str(e)}", None
+
+    # ──────────────────────────────────────────────
+    #  User Login (Email + Password)
+    # ──────────────────────────────────────────────
+
+    async def login_with_password(
+        self, email: str, password: str, location: Optional[dict] = None
+    ) -> Tuple[bool, str, Optional[dict]]:
+        """
+        Authenticate user with email and password.
+        Validates GPS location against registered location.
+
+        Returns:
+            Tuple of (success, message, token_data or None).
+        """
+        try:
+            user = await self.users_collection.find_one({"email": email})
+
+            if not user:
+                return False, "Invalid email or password", None
+
+            if not self.verify_password(password, user["password_hash"]):
+                return False, "Invalid email or password", None
+
+            # ── Location check ──
+            reg_loc = user.get("registered_location")
+            if reg_loc and location:
+                dist = haversine_distance(
+                    reg_loc["latitude"], reg_loc["longitude"],
+                    location["latitude"], location["longitude"],
+                )
+                logger.info(f"Location distance: {dist:.0f}m (limit: {LOCATION_RADIUS_M}m)")
+                if dist > LOCATION_RADIUS_M:
+                    return (
+                        False,
+                        f"Location mismatch — you are {dist:.0f}m away from your registered location. "
+                        f"Max allowed: {LOCATION_RADIUS_M}m. Please login from your registered location "
+                        f"or register again from this new location.",
+                        None,
+                    )
+            elif reg_loc and not location:
+                return (
+                    False,
+                    "Location is required for login. Please enable GPS/location services.",
+                    None,
+                )
+            # If no registered location, skip the check (backward compat)
+
+            user_id = str(user["_id"])
+
+            # Generate tokens
+            access_token = self.create_access_token(user_id, email)
+            refresh_token = self.create_refresh_token(user_id)
+            has_face_data = bool(user.get("face_embeddings"))
+            requires_face = has_face_data
+
+            token_data = {
+                "access_token": access_token,
+                "refresh_token": refresh_token,
+                "token_type": "bearer",
+                "requires_face_verification": requires_face,
+                "user_id": user_id,
+            }
+
+            if requires_face:
+                logger.info(f"Password + location OK for user: {user_id} — face verification required")
+                return True, "Password verified. Face verification required.", token_data
+            else:
+                logger.info(f"Password + location OK for user: {user_id} — no face data, login complete")
+                return True, "Login successful.", token_data
+
+        except Exception as e:
+            logger.error(f"Login failed: {e}")
+            return False, f"Login failed: {str(e)}", None
+
+    # ──────────────────────────────────────────────
+    #  Face Verification
+    # ──────────────────────────────────────────────
+
+    async def verify_face(
+        self, user_id: str, face_image: str
+    ) -> Tuple[bool, str, Optional[float]]:
+        """
+        Verify a user's face against their stored embeddings.
+
+        Args:
+            user_id: User ID (ObjectId string or email) to verify against.
+            face_image: Base64-encoded face image.
+
+        Returns:
+            Tuple of (is_verified, message, confidence_score).
+        """
+        try:
+            # Resolve identifier (email or ObjectId) to actual ObjectId
+            resolved_id = await self.resolve_user_id(user_id)
+            if not resolved_id:
+                return False, "User not found", None
+            user = await self.users_collection.find_one({"_id": ObjectId(resolved_id)})
+
+            if not user:
+                return False, "User not found", None
+
+            if not user.get("face_embeddings"):
+                return False, "No face data registered for this user", None
+
+            # Extract embedding from live image (strict quality checks + full-face validation)
+            live_embedding, reason = face_service.extract_embedding_with_reason(face_image, strict=True)
+            if live_embedding is None:
+                return False, reason, None
+
+            # Decrypt stored embeddings
+            stored_embeddings = decrypt_embeddings(user["face_embeddings"])
+
+            # Compare embeddings
+            is_match, score = face_service.compare_embeddings(live_embedding, stored_embeddings)
+
+            if is_match:
+                logger.info(f"Face verified for user {user_id} with score {score}")
+                return True, "Face Verified", score
+            else:
+                logger.warning(f"Face verification failed for user {user_id}, score: {score}")
+                return False, "Face Not Recognized", score
+
+        except Exception as e:
+            logger.error(f"Face verification error: {e}")
+            return False, f"Verification failed: {str(e)}", None
+
+    # ──────────────────────────────────────────────
+    #  Get User by ID
+    # ──────────────────────────────────────────────
+
+    async def get_user_by_id(self, user_id: str) -> Optional[dict]:
+        """Retrieve user data by ID or email (excluding sensitive fields)."""
+        try:
+            resolved_id = await self.resolve_user_id(user_id)
+            if not resolved_id:
+                return None
+            user = await self.users_collection.find_one(
+                {"_id": ObjectId(resolved_id)},
+                {
+                    "password_hash": 0,
+                    "face_embeddings": 0,
+                },
+            )
+            if user:
+                user["_id"] = str(user["_id"])
+            return user
+        except Exception as e:
+            logger.error(f"Error fetching user: {e}")
+            return None

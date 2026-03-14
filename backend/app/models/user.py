@@ -1,0 +1,150 @@
+"""
+Pydantic models for User entity.
+Handles request validation, response serialization, and DB schema.
+"""
+
+from datetime import datetime
+from typing import List, Optional
+from pydantic import BaseModel, Field, EmailStr, field_validator
+import re
+
+
+# ──────────────────────────────────────────────
+#  Shared Sub-Models
+# ──────────────────────────────────────────────
+
+class LocationData(BaseModel):
+    """GPS coordinates."""
+    latitude: float = Field(..., ge=-90, le=90, description="Latitude")
+    longitude: float = Field(..., ge=-180, le=180, description="Longitude")
+
+
+# ──────────────────────────────────────────────
+#  Request Models
+# ──────────────────────────────────────────────
+
+class UserRegisterRequest(BaseModel):
+    """Schema for user registration request."""
+    name: str = Field(..., min_length=2, max_length=100, description="Full name of the user")
+    email: EmailStr = Field(..., description="Unique email address")
+    phone: str = Field(..., min_length=10, max_length=15, description="Unique phone number")
+    password: str = Field(..., min_length=8, max_length=128, description="Strong password")
+    face_images: List[str] = Field(
+        default_factory=list,
+        max_length=4,
+        description="Base64-encoded face images: [front, left, right, up/down]. Empty if no camera."
+    )
+    location: Optional[LocationData] = Field(
+        default=None,
+        description="GPS coordinates at time of registration. Used for location-locked login."
+    )
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        """Validate phone number format."""
+        cleaned = re.sub(r"[\s\-\(\)]", "", v)
+        if not re.match(r"^\+?\d{10,15}$", cleaned):
+            raise ValueError("Invalid phone number format")
+        return cleaned
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        """Enforce strong password policy."""
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain at least one lowercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain at least one digit")
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", v):
+            raise ValueError("Password must contain at least one special character")
+        return v
+
+
+class UserLoginRequest(BaseModel):
+    """Schema for email + password login."""
+    email: EmailStr = Field(..., description="User email")
+    password: str = Field(..., description="User password")
+    location: Optional[LocationData] = Field(
+        default=None,
+        description="Current GPS coordinates. Compared against registered location."
+    )
+
+
+class FaceVerifyRequest(BaseModel):
+    """Schema for face verification request."""
+    user_id: str = Field(..., description="User ID to verify against")
+    face_image: str = Field(..., description="Base64-encoded face image for verification")
+
+
+# ──────────────────────────────────────────────
+#  Response Models
+# ──────────────────────────────────────────────
+
+class UserResponse(BaseModel):
+    """Schema for user data in API responses."""
+    id: str = Field(..., alias="_id")
+    name: str
+    email: str
+    phone: str
+    registered_location: Optional[dict] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        populate_by_name = True
+
+
+class AuthTokenResponse(BaseModel):
+    """Schema for authentication token response."""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    requires_face_verification: bool = True
+    user_id: str
+
+
+class FaceVerificationResponse(BaseModel):
+    """Schema for face verification result."""
+    status: bool
+    message: str
+    confidence: Optional[float] = None
+
+
+class RegisterResponse(BaseModel):
+    """Schema for registration response."""
+    status: bool
+    message: str
+    user_id: Optional[str] = None
+
+
+class StandardResponse(BaseModel):
+    """Generic API response wrapper."""
+    status: bool
+    message: str
+    data: Optional[dict] = None
+
+
+# ──────────────────────────────────────────────
+#  Database Document Model
+# ──────────────────────────────────────────────
+
+class UserDocument(BaseModel):
+    """Schema representing a user document in MongoDB."""
+    name: str
+    email: str
+    phone: str
+    password_hash: str
+    face_embeddings: List[List[float]] = Field(
+        default_factory=list,
+        description="Array of face embedding vectors (encrypted)"
+    )
+    registered_location: Optional[dict] = Field(
+        default=None,
+        description="GPS location at registration time: {latitude, longitude}"
+    )
+    liveness_verified: bool = False
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
