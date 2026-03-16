@@ -14,7 +14,7 @@ bcrypt>=4.1.0
 PyJWT>=2.8.0
 
 # Face Recognition & Image Processing (OpenCV DNN — no compilation needed)
-opencv-contrib-python-headless>=4.8.0
+opencv-python-headless>=4.8.0
 mediapipe>=0.10.0
 Pillow>=10.0.0
 numpy>=1.24.0
@@ -32,5 +32,5 @@ python-multipart>=0.0.6
 # Logging & Utilities
 python-dotenv>=1.0.0
 
-# Production Server
-gunicorn>=21.2.0
+# Production Server (Linux only — skip on Windows)
+# gunicorn>=21.2.0

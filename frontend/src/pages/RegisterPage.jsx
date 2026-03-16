@@ -15,7 +15,7 @@ import useGeolocation from '../hooks/useGeolocation';
 
 const RegisterPage = () => {
   const navigate = useNavigate();
-  const { position: geoPosition } = useGeolocation({ watch: false });
+  const { position: geoPosition, loading: geoLoading, permissionDenied: geoDenied, refresh: geoRefresh } = useGeolocation({ watch: false });
 
   // Form state
   const [formData, setFormData] = useState({
@@ -176,10 +176,10 @@ const RegisterPage = () => {
   }, [formData, navigate]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen min-h-[100dvh] bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center px-3 py-6 sm:p-4">
       <div className="w-full max-w-xl">
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 sm:p-8">
+        <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-6 md:p-8">
           {/* Header */}
           <div className="text-center mb-6">
             <div className="w-14 h-14 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-3">
@@ -302,6 +302,42 @@ const RegisterPage = () => {
                   }`}
                 />
                 {errors.confirmPassword && <p className="text-red-500 text-xs mt-1">{errors.confirmPassword}</p>}
+              </div>
+
+              {/* ── Registration Location Status ── */}
+              <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm ${
+                geoPosition
+                  ? 'bg-green-50 border-green-200 text-green-700'
+                  : geoDenied
+                  ? 'bg-red-50 border-red-200 text-red-600'
+                  : 'bg-blue-50 border-blue-200 text-blue-600'
+              }`}>
+                {geoPosition ? (
+                  <>
+                    <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
+                    <div className="flex-1">
+                      <span className="font-medium">📍 Registration location captured</span>
+                      <p className="text-xs text-green-500 mt-0.5">You will only be able to login from this area (1km radius)</p>
+                    </div>
+                    <span className="text-xs text-green-500 font-mono">
+                      {geoPosition.latitude.toFixed(4)}, {geoPosition.longitude.toFixed(4)}
+                    </span>
+                  </>
+                ) : geoDenied ? (
+                  <>
+                    <div className="w-2.5 h-2.5 bg-red-500 rounded-full" />
+                    <div className="flex-1">
+                      <span className="font-medium">⚠️ Location denied</span>
+                      <p className="text-xs text-red-500 mt-0.5">Click 🔒 in address bar → Allow location for login security</p>
+                    </div>
+                    <button onClick={geoRefresh} className="text-xs bg-red-100 hover:bg-red-200 px-2 py-1 rounded font-medium transition-colors">Retry</button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="font-medium">Detecting your location...</span>
+                  </>
+                )}
               </div>
 
               <button

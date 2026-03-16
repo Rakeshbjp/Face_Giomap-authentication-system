@@ -1,15 +1,20 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-venv/
-.env
-
-# Node
+# Dependencies
 node_modules/
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Environment
+.env
+.env.local
+
+# Build
 dist/
-.vite/
+build/
+*.egg-info/
 
 # IDE
 .vscode/
@@ -21,9 +26,11 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Models
-backend/app/models/dnn/*.caffemodel
-backend/app/models/dnn/*.prototxt
-
 # Logs
 *.log
+app.log
+
+# Temp
+tmp/
+temp/
+.vercel

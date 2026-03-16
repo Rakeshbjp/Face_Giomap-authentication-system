@@ -177,39 +177,38 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
   // ── Camera error state ──
   if (error) {
     return (
-      <div className="text-center p-8">
-        <div className="text-red-500 mb-4">
-          <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="text-center px-4 py-6">
+        <div className="text-red-500 mb-3">
+          <svg className="w-12 h-12 sm:w-16 sm:h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
               d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
             />
           </svg>
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-2">Camera Unavailable</h3>
-        <p className="text-gray-600 mb-4">{error}</p>
-        <div className="flex gap-3 justify-center mb-4">
-          <button onClick={startCamera} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-1">Camera Unavailable</h3>
+        <p className="text-gray-600 text-sm mb-4 max-w-sm mx-auto">{error}</p>
+
+        <div className="flex gap-2 justify-center mb-4">
+          <button onClick={startCamera} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium">
             Retry Camera
           </button>
           {onCancel && (
-            <button onClick={onCancel} className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+            <button onClick={onCancel} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm">
               Cancel
             </button>
           )}
         </div>
 
-        {/* Skip face verification fallback */}
+        {/* Skip face verification — ALWAYS visible when available */}
         {onSkip && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-sm text-gray-500 mb-3">
-              No camera available? You can continue with password-only login.
-            </p>
+          <div className="pt-3 border-t border-gray-200">
             <button
               onClick={onSkip}
-              className="px-6 py-2.5 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-colors text-sm font-medium"
+              className="w-full py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
             >
               Continue without camera →
             </button>
+            <p className="text-xs text-gray-400 mt-2">Login with password only — no face verification</p>
           </div>
         )}
       </div>
@@ -218,9 +217,9 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
 
   return (
     <div className="w-full max-w-lg mx-auto">
-      <div className="text-center mb-4">
-        <h3 className="text-xl font-semibold text-gray-900">Real-Time Face Verification</h3>
-        <p className="text-sm text-gray-500 mt-1">
+      <div className="text-center mb-3 sm:mb-4">
+        <h3 className="text-lg sm:text-xl font-semibold text-gray-900">Real-Time Face Verification</h3>
+        <p className="text-xs sm:text-sm text-gray-500 mt-1">
           Look directly at the camera — verification runs automatically
         </p>
       </div>
@@ -229,10 +228,10 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
       <div className="relative bg-black rounded-2xl overflow-hidden mb-4">
         <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-2xl" style={{ transform: 'scaleX(-1)' }} />
 
-        {/* Oval face guide */}
+        {/* Oval face guide — smaller on mobile */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div
-            className={`w-56 h-72 rounded-full border-[3px] transition-all duration-500 ${
+            className={`w-40 h-52 sm:w-56 sm:h-72 rounded-full border-[3px] transition-all duration-500 ${
               status === 'verified'
                 ? 'border-green-400 shadow-[0_0_30px_rgba(34,197,94,0.5)]'
                 : status === 'failed'

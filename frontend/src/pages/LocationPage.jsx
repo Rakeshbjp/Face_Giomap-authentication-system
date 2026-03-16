@@ -48,8 +48,8 @@ const LocationPage = () => {
       <div className="bg-black/20 backdrop-blur-sm border-b border-white/10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              <svg className="w-7 h-7 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <h1 className="text-xl sm:text-2xl font-bold text-white flex items-center gap-2">
+              <svg className="w-5 h-5 sm:w-7 sm:h-7 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -57,7 +57,7 @@ const LocationPage = () => {
               </svg>
               Live Location
             </h1>
-            <p className="text-sm text-blue-300 mt-0.5">Real-time GPS tracking • OpenStreetMap</p>
+            <p className="text-xs sm:text-sm text-blue-300 mt-0.5">Real-time GPS tracking • OpenStreetMap</p>
           </div>
           <button
             onClick={refresh}
@@ -72,7 +72,7 @@ const LocationPage = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* ── Permission Denied Banner ── */}
         {permissionDenied && (
           <div className="mb-6 bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5">
@@ -103,7 +103,7 @@ const LocationPage = () => {
         )}
 
         {/* Info cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
           {/* Current location */}
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10">
             <div className="flex items-center gap-2 mb-2">
@@ -124,8 +124,8 @@ const LocationPage = () => {
               </div>
             ) : position ? (
               <div className="text-white">
-                <p className="text-lg font-mono font-bold">{position.latitude.toFixed(6)}</p>
-                <p className="text-lg font-mono font-bold">{position.longitude.toFixed(6)}</p>
+              <p className="text-sm sm:text-lg font-mono font-bold">{position.latitude.toFixed(6)}</p>
+                <p className="text-sm sm:text-lg font-mono font-bold">{position.longitude.toFixed(6)}</p>
                 {position.accuracy && (
                   <p className="text-xs text-white/50 mt-1">Accuracy: ±{position.accuracy.toFixed(0)}m</p>
                 )}
@@ -141,8 +141,8 @@ const LocationPage = () => {
             </div>
             {registeredLocation ? (
               <div className="text-white">
-                <p className="text-lg font-mono font-bold">{registeredLocation.latitude.toFixed(6)}</p>
-                <p className="text-lg font-mono font-bold">{registeredLocation.longitude.toFixed(6)}</p>
+                <p className="text-sm sm:text-lg font-mono font-bold">{registeredLocation.latitude.toFixed(6)}</p>
+                <p className="text-sm sm:text-lg font-mono font-bold">{registeredLocation.longitude.toFixed(6)}</p>
                 <p className="text-xs text-white/50 mt-1">Login locked to this area (1km radius)</p>
               </div>
             ) : (
@@ -212,7 +212,7 @@ const LocationPage = () => {
             registeredLocation={registeredLocation}
             showAccuracy={true}
             followUser={true}
-            height={500}
+            height={typeof window !== 'undefined' && window.innerWidth < 640 ? 300 : 500}
             className="border border-white/10"
           />
         )}

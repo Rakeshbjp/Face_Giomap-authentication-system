@@ -1,21 +1,18 @@
-# Render Blueprint — Face Auth Backend
-# Docs: https://render.com/docs/blueprint-spec
-
 services:
   - type: web
-    name: face-auth-backend
-    runtime: python
-    region: oregon
-    plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
-    rootDir: backend
+    name: face-auth-api
+    env: python
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
     envVars:
-      - key: MONGODB_URI
-        sync: false
-      - key: JWT_SECRET_KEY
-        generateValue: true
-      - key: ENCRYPTION_KEY
-        generateValue: true
       - key: PYTHON_VERSION
-        value: "3.11.0"
+        value: 3.11.0
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: "*"
+      # You MUST add the following variables in the Render Dashboard:
+      # - MONGODB_URL
+      # - MONGODB_DB_NAME
+      # - JWT_SECRET_KEY
+      # - EMBEDDING_ENCRYPTION_KEY
