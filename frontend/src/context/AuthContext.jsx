@@ -2,7 +2,7 @@
  * Authentication context providing user state across the application.
  */
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { getProfile } from '../services/authService';
+import { getProfile, healthCheck } from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -32,6 +32,9 @@ export const AuthProvider = ({ children }) => {
         } catch {
           logout();
         }
+      } else {
+        // No token (new user / not logged in) — Ping backend to wake up the free Render instance (cold start mitigation)
+        healthCheck().catch(() => {});
       }
       setLoading(false);
     };

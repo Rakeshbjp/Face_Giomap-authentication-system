@@ -1,10 +1,16 @@
 /**
  * Home / Landing Page.
  */
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { healthCheck } from '../services/authService';
 
 const HomePage = () => {
+  // Wake up the free Render backend instance as soon as the user lands on the website
+  useEffect(() => {
+    healthCheck().catch(() => {});
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Hero */}
