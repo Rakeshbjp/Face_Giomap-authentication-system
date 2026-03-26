@@ -122,6 +122,11 @@ const RegisterPage = () => {
           setStep(2);
         }
       } catch (err) {
+        if (err.isTimeout || err.friendlyMessage) {
+          toast.error(err.friendlyMessage || 'Server is starting up — please try again in a few seconds.');
+          setStep(2);
+          return;
+        }
         const detail = err.response?.data?.detail;
         const errorMsg = Array.isArray(detail) ? detail.map(e => e.msg).join(', ') : detail || 'Registration failed. Please try again.';
         toast.error(errorMsg);
@@ -166,6 +171,11 @@ const RegisterPage = () => {
         setStep(2);
       }
     } catch (err) {
+      if (err.isTimeout || err.friendlyMessage) {
+        toast.error(err.friendlyMessage || 'Server is starting up — please try again in a few seconds.');
+        setStep(2);
+        return;
+      }
       const detail = err.response?.data?.detail;
       const errorMsg = Array.isArray(detail) ? detail.map(e => e.msg).join(', ') : detail || 'Registration failed. Please try again.';
       toast.error(errorMsg);

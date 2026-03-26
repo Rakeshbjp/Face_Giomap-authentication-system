@@ -8,7 +8,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000, // 120s timeout to allow Render free tier to wake up (Cold Start)
+  timeout: 120000, // 120s — Render free tier can take ~50s to cold-start
   headers: {
     'Content-Type': 'application/json',
   },
@@ -30,6 +30,12 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Timeout or network error (Render cold start)
+    if (error.code === 'ECONNABORTED' || !error.response) {
+      error.isTimeout = true;
+      error.friendlyMessage = 'Server is waking up — please wait a moment and try again.';
+      return Promise.reject(error);
+    }
     if (error.response?.status === 401) {
       const url = error.config?.url || '';
       // Only auto-redirect for expired tokens, not for login/register failures

@@ -79,6 +79,12 @@ const LoginPage = () => {
       toast.success('Password verified! Now verify your face.');
       setStep('face-verify');
     } catch (err) {
+      // Timeout / cold-start — show a friendly wake-up message
+      if (err.isTimeout || err.friendlyMessage) {
+        toast.error(err.friendlyMessage || 'Server is starting up — please try again in a few seconds.');
+        return;
+      }
+
       const detail = err.response?.data?.detail || '';
       const errorMsg = Array.isArray(detail) ? detail.map(e => e.msg).join(', ') : detail || 'Login failed. Check your credentials.';
 

@@ -703,13 +703,8 @@ class FaceRecognitionService:
             reference: list[float] = embeddings[0]
             rest: list[list[float]] = list(embeddings[1:])  # pyre-ignore[29]
             for i, emb in enumerate(rest, 1):
-                # Side profiles alter the SFace embedding vs a front face drastically.
-                # Use a forgiving threshold (0.35) for liveness to avoid false rejections.
-                ref_vec = np.array(reference, dtype=np.float32).reshape(1, -1)
-                emb_vec = np.array(emb, dtype=np.float32).reshape(1, -1)
-                score = self._compute_similarity(ref_vec, emb_vec)
-                
-                if score < 0.35:
+                is_match, score = self.compare_embeddings(reference, [emb])
+                if not is_match:
                     return False, f"Face mismatch detected between views (image {i + 1})"
 
             # Check for positional variation (anti-photo spoofing)
