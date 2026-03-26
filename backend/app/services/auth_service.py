@@ -77,8 +77,8 @@ class AuthService:
 
     @staticmethod
     def hash_password(password: str) -> str:
-        """Hash a password using bcrypt."""
-        salt = bcrypt.gensalt(rounds=12)
+        """Hash a password using bcrypt. Used rounds=8 instead of 12 because Render Free Tier has 0.1 CPU limits and takes 4s to calculate 12."""
+        salt = bcrypt.gensalt(rounds=8)
         return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
     @staticmethod
