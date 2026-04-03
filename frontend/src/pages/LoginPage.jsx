@@ -8,7 +8,7 @@
  * Camera availability is no longer a gate — let the camera components
  * handle their own error states with retry.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -19,7 +19,7 @@ import useGeolocation from '../hooks/useGeolocation';
 
 const LoginPage = () => {
   const navigate = useNavigate();
-  const { loginSuccess, faceVerified } = useAuth();
+  const { isAuthenticated, loginSuccess, faceVerified } = useAuth();
   const { position: geoPosition, loading: geoLoading, error: geoError, permissionDenied: geoDenied, refresh: geoRefresh } = useGeolocation({ watch: false });
 
   // State
@@ -31,6 +31,18 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [locationError, setLocationError] = useState(null); // location mismatch error
+
+  /**
+   * Auto-advance to face verification if arriving from an external login (login.html).
+   * Tokens are already in localStorage via AuthContext's URL-param bridge.
+   */
+  useEffect(() => {
+    const storedUserId = localStorage.getItem('user_id');
+    if (isAuthenticated && storedUserId && step === 'credentials') {
+      setUserId(storedUserId);
+      setStep('face-verify');
+    }
+  }, [isAuthenticated, step]);
 
   /**
    * Handle email + password login.

@@ -14,9 +14,37 @@ export const AuthProvider = ({ children }) => {
 
   /**
    * Check if user is already logged in on mount.
+   * Also handles tokens passed via URL params from external login pages (e.g. login.html).
    */
   useEffect(() => {
     const checkAuth = async () => {
+      // ── External login bridge ──
+      // If tokens are passed as URL params (from login.html or any external entry point),
+      // consume them into localStorage and strip from the URL.
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToken = urlParams.get('access_token');
+      const urlRefresh = urlParams.get('refresh_token');
+      const urlUserId = urlParams.get('user_id');
+      const urlRequiresFace = urlParams.get('requires_face') !== 'false';
+
+      if (urlToken && urlUserId) {
+        localStorage.setItem('access_token', urlToken);
+        if (urlRefresh) localStorage.setItem('refresh_token', urlRefresh);
+        localStorage.setItem('user_id', urlUserId);
+
+        // Clean the URL so tokens aren't visible / bookmarkable
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+
+        // If face verification IS required, set password-authenticated state and let LoginPage handle face step
+        if (urlRequiresFace) {
+          setIsAuthenticated(true);
+          setIsFaceVerified(false);
+          setLoading(false);
+          return;
+        }
+      }
+
       const token = localStorage.getItem('access_token');
       const faceVerifiedFlag = localStorage.getItem('face_verified') === 'true';
       const noCameraLogin = localStorage.getItem('no_camera_login') === 'true';
