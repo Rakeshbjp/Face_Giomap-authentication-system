@@ -80,6 +80,9 @@ app.add_middleware(
 
 # CORS
 origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",")]
+# Also allow 'null' origin for standalone login.html opened via file:// protocol
+if "null" not in origins:
+    origins.append("null")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
