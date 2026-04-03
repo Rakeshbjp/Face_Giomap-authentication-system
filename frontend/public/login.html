@@ -1,5 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
+
+<!-- ╔═══════════════════════════════════════════════════════════╗
+     ║  CONFIGURATION — Edit these values to customise the app  ║
+     ╚═══════════════════════════════════════════════════════════╝ -->
+<script>
+  window.APP_CONFIG = {
+    // ── URLs ──
+    API_BASE_URL:    'https://face-auth-backend-q40q.onrender.com',   // Backend base (no trailing slash)
+    LOGIN_ENDPOINT:  '/api/auth/login',                                // Login route
+    HEALTH_ENDPOINT: '/api/auth/health',                               // Health-check (wakes up Render)
+    REDIRECT_URL:    'https://frontend-flame-delta-27.vercel.app/login', // Where to go after login
+    REGISTER_URL:    'https://frontend-flame-delta-27.vercel.app/register', // Sign-up link
+
+    // ── Behaviour ──
+    APPEND_TOKEN_TO_REDIRECT: true,   // Pass tokens as URL params on redirect
+    TIMEOUT_MS: 120000,               // API timeout (ms) — 120s for Render cold-starts
+
+    // ── localStorage Keys ──
+    STORAGE_KEYS: {
+      accessToken:  'access_token',
+      refreshToken: 'refresh_token',
+      userId:       'user_id',
+      loginTime:    'login_time',
+      authPayload:  'auth_payload',
+    },
+  };
+</script>
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -369,6 +397,12 @@
         <span id="statusText">Checking server...</span>
       </div>
 
+      <!-- Location status -->
+      <div id="locationStatus" class="server-status checking" style="margin-top:-12px">
+        <span class="dot"></span>
+        <span id="locationText">Detecting location...</span>
+      </div>
+
       <!-- Form -->
       <form id="loginForm" novalidate autocomplete="on">
         <!-- Email -->
@@ -427,8 +461,9 @@
       <div class="divider">Secured by FaceAuth</div>
 
       <p class="footer">
-        Don't have an account? <a href="https://frontend-flame-delta-27.vercel.app/register">Sign up</a>
+        Don't have an account? <a id="registerLink" href="#">Sign up</a>
       </p>
+      <script>document.getElementById('registerLink').href = window.APP_CONFIG.REGISTER_URL;</script>
     </div>
   </div>
 
@@ -439,37 +474,47 @@
     (() => {
       'use strict';
 
+      // Use the configuration defined at the top of this file
+      const CONFIG = window.APP_CONFIG;
+
       /* ─────────────────────────────────────────────
-         CONFIGURATION — Customise these values
+         GEOLOCATION
          ───────────────────────────────────────────── */
-      const CONFIG = {
-        // Backend base URL (no trailing slash)
-        API_BASE_URL: 'https://face-auth-backend-q40q.onrender.com',
+      let userLocation = null;
 
-        // Login endpoint (appended to API_BASE_URL)
-        LOGIN_ENDPOINT: '/api/auth/login',
+      function initGeolocation() {
+        const locStatus = document.getElementById('locationStatus');
+        const locText   = document.getElementById('locationText');
 
-        // Health-check endpoint (to wake up Render free tier)
-        HEALTH_ENDPOINT: '/api/auth/health',
+        if (!navigator.geolocation) {
+          locStatus.className = 'server-status offline';
+          locText.textContent  = 'Geolocation not supported by this browser';
+          return;
+        }
 
-        // Where to redirect after successful login (your React app's login page)
-        REDIRECT_URL: 'https://frontend-flame-delta-27.vercel.app/login',
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            userLocation = {
+              latitude:  pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            };
+            locStatus.className = 'server-status online';
+            locText.textContent  = `📍 Location detected (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`;
+          },
+          (err) => {
+            if (err.code === 1) {
+              locStatus.className = 'server-status offline';
+              locText.textContent  = '⚠️ Location denied — tap 🔒 in address bar → Allow';
+            } else {
+              locStatus.className = 'server-status waking';
+              locText.textContent  = '⚠️ Could not detect location';
+            }
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+        );
+      }
 
-        // Whether to append auth data as URL params on redirect
-        APPEND_TOKEN_TO_REDIRECT: true,
-
-        // localStorage keys
-        STORAGE_KEYS: {
-          accessToken:  'access_token',
-          refreshToken: 'refresh_token',
-          userId:       'user_id',
-          loginTime:    'login_time',
-          authPayload:  'auth_payload',
-        },
-
-        // Request timeout (ms) — Render free tier can take ~60s to cold-start
-        TIMEOUT_MS: 120_000,
-      };
+      initGeolocation();
 
       /* ─────────────────────────────────────────────
          DOM REFERENCES
@@ -657,13 +702,19 @@
         const email    = emailInput.value.trim().toLowerCase();
         const password = pwInput.value;
 
+        // Build payload — include location if available
+        const payload = { email, password };
+        if (userLocation) {
+          payload.location = userLocation;
+        }
+
         try {
           const res = await fetchWithTimeout(
             CONFIG.API_BASE_URL + CONFIG.LOGIN_ENDPOINT,
             {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, password }),
+              body: JSON.stringify(payload),
             }
           );
 
