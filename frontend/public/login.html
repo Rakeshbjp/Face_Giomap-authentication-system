@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Secure authentication portal — FaceAuth Login" />
+  <title>Login — FaceAuth</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ═══════════════════════════════════════════════
+       DESIGN TOKENS
+       ═══════════════════════════════════════════════ */
+    :root {
+      --primary:        #4f46e5;
+      --primary-hover:  #4338ca;
+      --primary-light:  #eef2ff;
+      --primary-glow:   rgba(79, 70, 229, .35);
+      --success:        #10b981;
+      --danger:         #ef4444;
+      --danger-bg:      #fef2f2;
+      --danger-border:  #fecaca;
+      --text:           #1e293b;
+      --text-muted:     #64748b;
+      --bg:             #f0f2f7;
+      --card:           #ffffff;
+      --border:         #e2e8f0;
+      --input-bg:       #f8fafc;
+      --radius:         14px;
+      --shadow-card:    0 20px 60px rgba(0,0,0,.08), 0 1px 3px rgba(0,0,0,.04);
+      --transition:     .25s cubic-bezier(.4,0,.2,1);
+    }
+
+    /* ═══════════════════════════════════════════════
+       RESET & BASE
+       ═══════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      -webkit-font-smoothing: antialiased;
+
+      /* subtle animated gradient background */
+      background: linear-gradient(135deg, #e0e7ff 0%, #f0f2f7 40%, #faf5ff 100%);
+      background-size: 400% 400%;
+      animation: bgShift 12s ease infinite;
+    }
+
+    @keyframes bgShift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* ═══════════════════════════════════════════════
+       LOGIN CARD
+       ═══════════════════════════════════════════════ */
+    .login-wrapper {
+      width: 100%;
+      max-width: 440px;
+    }
+
+    .login-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-card);
+      padding: 40px 36px 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* decorative top accent bar */
+    .login-card::before {
+      content: '';
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--primary), #7c3aed, var(--primary));
+      background-size: 200% 100%;
+      animation: shimmer 3s linear infinite;
+    }
+    @keyframes shimmer {
+      0%   { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* ── Logo / Icon ── */
+    .brand-icon {
+      width: 56px; height: 56px;
+      background: var(--primary);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 20px;
+      box-shadow: 0 8px 24px var(--primary-glow);
+    }
+    .brand-icon svg { width: 30px; height: 30px; color: #fff; }
+
+    /* ── Headings ── */
+    .login-card h1 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      text-align: center;
+      letter-spacing: -.02em;
+    }
+    .login-card .subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: .92rem;
+      margin: 6px 0 28px;
+    }
+
+    /* ═══════════════════════════════════════════════
+       FORM ELEMENTS
+       ═══════════════════════════════════════════════ */
+    .form-group { margin-bottom: 18px; position: relative; }
+
+    .form-group label {
+      display: block;
+      font-size: .82rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+
+    .input-wrapper {
+      position: relative;
+    }
+    .input-wrapper .icon {
+      position: absolute;
+      left: 14px;
+      top: 50%; transform: translateY(-50%);
+      width: 18px; height: 18px;
+      color: var(--text-muted);
+      pointer-events: none;
+      transition: color var(--transition);
+    }
+    .input-wrapper input:focus ~ .icon { color: var(--primary); }
+
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px 12px 42px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-size: .94rem;
+      font-family: inherit;
+      background: var(--input-bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
+    }
+    .form-group input::placeholder { color: #94a3b8; }
+    .form-group input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3.5px var(--primary-glow);
+      background: #fff;
+    }
+    .form-group input.invalid { border-color: var(--danger); }
+
+    /* password toggle */
+    .pw-toggle {
+      position: absolute;
+      right: 12px; top: 50%;
+      transform: translateY(-50%);
+      background: none; border: none; cursor: pointer;
+      color: var(--text-muted);
+      padding: 4px;
+      display: flex;
+      transition: color var(--transition);
+    }
+    .pw-toggle:hover { color: var(--primary); }
+    .pw-toggle svg { width: 20px; height: 20px; }
+
+    /* field error text */
+    .field-error {
+      font-size: .78rem;
+      color: var(--danger);
+      margin-top: 4px;
+      display: none;
+    }
+    .field-error.visible { display: block; }
+
+    /* ── Submit Button ── */
+    .btn-submit {
+      width: 100%;
+      padding: 13px;
+      background: var(--primary);
+      color: #fff;
+      font-size: .95rem;
+      font-weight: 600;
+      font-family: inherit;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 24px;
+      transition: background var(--transition), box-shadow var(--transition), transform .15s ease;
+      box-shadow: 0 4px 14px var(--primary-glow);
+    }
+    .btn-submit:hover:not(:disabled) {
+      background: var(--primary-hover);
+      box-shadow: 0 6px 20px var(--primary-glow);
+      transform: translateY(-1px);
+    }
+    .btn-submit:active:not(:disabled) { transform: translateY(0); }
+    .btn-submit:disabled {
+      opacity: .7;
+      cursor: not-allowed;
+    }
+
+    /* spinner inside button */
+    .btn-spinner {
+      width: 20px; height: 20px;
+      border: 2.5px solid rgba(255,255,255,.35);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      display: none;
+    }
+    .btn-submit.loading .btn-spinner { display: block; }
+    .btn-submit.loading .btn-text   { display: none; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ═══════════════════════════════════════════════
+       TOAST NOTIFICATION
+       ═══════════════════════════════════════════════ */
+    .toast {
+      position: fixed;
+      top: 24px; right: 24px;
+      padding: 14px 20px;
+      border-radius: 12px;
+      font-size: .88rem;
+      font-weight: 500;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.18);
+      transform: translateX(120%);
+      transition: transform .35s cubic-bezier(.22,1,.36,1);
+      z-index: 9999;
+      max-width: 380px;
+    }
+    .toast.show { transform: translateX(0); }
+    .toast.success { background: var(--success); }
+    .toast.error   { background: var(--danger);  }
+    .toast svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+    /* ═══════════════════════════════════════════════
+       SERVER STATUS BADGE
+       ═══════════════════════════════════════════════ */
+    .server-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: .8rem;
+      font-weight: 500;
+      margin-bottom: 22px;
+      transition: all var(--transition);
+    }
+    .server-status .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .server-status.checking { background: #eff6ff; color: #3b82f6; }
+    .server-status.checking .dot {
+      background: #3b82f6;
+      animation: pulse-dot 1.2s ease infinite;
+    }
+    .server-status.online { background: #ecfdf5; color: #059669; }
+    .server-status.online .dot { background: #10b981; }
+    .server-status.offline { background: #fef2f2; color: #dc2626; }
+    .server-status.offline .dot { background: #ef4444; }
+    .server-status.waking  { background: #fffbeb; color: #d97706; }
+    .server-status.waking .dot {
+      background: #f59e0b;
+      animation: pulse-dot 1s ease infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: .4; transform: scale(.7); }
+    }
+
+    /* ═══════════════════════════════════════════════
+       FOOTER & MISC
+       ═══════════════════════════════════════════════ */
+    .footer {
+      text-align: center;
+      margin-top: 20px;
+      font-size: .82rem;
+      color: var(--text-muted);
+    }
+    .footer a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer a:hover { text-decoration: underline; }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 22px 0 18px;
+      color: var(--text-muted);
+      font-size: .78rem;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ═══════════════════════════════════════════════
+       RESPONSIVE
+       ═══════════════════════════════════════════════ */
+    @media (max-width: 480px) {
+      .login-card { padding: 32px 22px 24px; }
+      .login-card h1 { font-size: 1.35rem; }
+      .toast { right: 12px; left: 12px; max-width: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ─────── Toast ─────── -->
+  <div id="toast" class="toast" role="alert" aria-live="polite">
+    <svg id="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></svg>
+    <span id="toast-msg"></span>
+  </div>
+
+  <!-- ─────── Login Card ─────── -->
+  <div class="login-wrapper">
+    <div class="login-card">
+
+      <!-- Brand -->
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/>
+          <polyline points="10 17 15 12 10 7"/>
+          <line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
+      </div>
+      <h1>Welcome Back</h1>
+      <p class="subtitle">Sign in to continue to your dashboard</p>
+
+      <!-- Server status -->
+      <div id="serverStatus" class="server-status checking">
+        <span class="dot"></span>
+        <span id="statusText">Checking server...</span>
+      </div>
+
+      <!-- Form -->
+      <form id="loginForm" novalidate autocomplete="on">
+        <!-- Email -->
+        <div class="form-group">
+          <label for="email">Email Address</label>
+          <div class="input-wrapper">
+            <input
+              id="email"
+              type="email"
+              name="email"
+              placeholder="you@example.com"
+              autocomplete="email"
+              required
+            />
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2"/>
+              <path d="M22 4L12 13 2 4"/>
+            </svg>
+          </div>
+          <p class="field-error" id="emailError"></p>
+        </div>
+
+        <!-- Password -->
+        <div class="form-group">
+          <label for="password">Password</label>
+          <div class="input-wrapper">
+            <input
+              id="password"
+              type="password"
+              name="password"
+              placeholder="Enter your password"
+              autocomplete="current-password"
+              required
+            />
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0110 0v4"/>
+            </svg>
+            <button type="button" class="pw-toggle" id="pwToggle" aria-label="Toggle password visibility">
+              <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+          <p class="field-error" id="passwordError"></p>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" class="btn-submit" id="submitBtn">
+          <span class="btn-spinner"></span>
+          <span class="btn-text">Sign In</span>
+        </button>
+      </form>
+
+      <div class="divider">Secured by FaceAuth</div>
+
+      <p class="footer">
+        Don't have an account? <a href="https://frontend-flame-delta-27.vercel.app/register">Sign up</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════
+       JAVASCRIPT — Authentication Logic
+       ═══════════════════════════════════════════════════ -->
+  <script>
+    (() => {
+      'use strict';
+
+      /* ─────────────────────────────────────────────
+         CONFIGURATION — Customise these values
+         ───────────────────────────────────────────── */
+      const CONFIG = {
+        // Backend base URL (no trailing slash)
+        API_BASE_URL: 'https://face-auth-backend-q40q.onrender.com',
+
+        // Login endpoint (appended to API_BASE_URL)
+        LOGIN_ENDPOINT: '/api/auth/login',
+
+        // Health-check endpoint (to wake up Render free tier)
+        HEALTH_ENDPOINT: '/api/auth/health',
+
+        // Where to redirect after successful login (your React app's login page)
+        REDIRECT_URL: 'https://frontend-flame-delta-27.vercel.app/login',
+
+        // Whether to append auth data as URL params on redirect
+        APPEND_TOKEN_TO_REDIRECT: true,
+
+        // localStorage keys
+        STORAGE_KEYS: {
+          accessToken:  'access_token',
+          refreshToken: 'refresh_token',
+          userId:       'user_id',
+          loginTime:    'login_time',
+          authPayload:  'auth_payload',
+        },
+
+        // Request timeout (ms) — Render free tier can take ~60s to cold-start
+        TIMEOUT_MS: 120_000,
+      };
+
+      /* ─────────────────────────────────────────────
+         DOM REFERENCES
+         ───────────────────────────────────────────── */
+      const $ = (s) => document.querySelector(s);
+      const form       = $('#loginForm');
+      const emailInput = $('#email');
+      const pwInput    = $('#password');
+      const submitBtn  = $('#submitBtn');
+      const pwToggle   = $('#pwToggle');
+      const emailErr   = $('#emailError');
+      const pwErr      = $('#passwordError');
+      const statusEl   = $('#serverStatus');
+      const statusText = $('#statusText');
+
+      /* ─────────────────────────────────────────────
+         TOAST SYSTEM
+         ───────────────────────────────────────────── */
+      let toastTimer = null;
+
+      function showToast(message, type = 'error') {
+        const toast = $('#toast');
+        const icon  = $('#toast-icon');
+        const msg   = $('#toast-msg');
+
+        toast.className = `toast ${type}`;
+        msg.textContent = message;
+
+        // Set icon path
+        if (type === 'success') {
+          icon.innerHTML = '<polyline points="20 6 9 17 4 12"/>';
+        } else {
+          icon.innerHTML = '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>';
+        }
+
+        // Animate in
+        clearTimeout(toastTimer);
+        requestAnimationFrame(() => toast.classList.add('show'));
+        toastTimer = setTimeout(() => toast.classList.remove('show'), 5000);
+      }
+
+      /* ─────────────────────────────────────────────
+         SERVER HEALTH CHECK (wake up Render)
+         ───────────────────────────────────────────── */
+      async function checkServerHealth() {
+        const url = CONFIG.API_BASE_URL + CONFIG.HEALTH_ENDPOINT;
+        const startTime = Date.now();
+
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
+
+          const res = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+
+          const elapsed = Date.now() - startTime;
+
+          if (res.ok) {
+            setServerStatus('online', elapsed > 10000
+              ? 'Server online (was waking up)'
+              : 'Server online — ready');
+          } else {
+            setServerStatus('offline', 'Server returned an error');
+          }
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            setServerStatus('offline', 'Server timed out');
+          } else {
+            setServerStatus('waking', 'Server is starting up — login may be slow on first attempt');
+          }
+        }
+      }
+
+      function setServerStatus(state, text) {
+        statusEl.className = `server-status ${state}`;
+        statusText.textContent = text;
+      }
+
+      /* ─────────────────────────────────────────────
+         VALIDATION
+         ───────────────────────────────────────────── */
+      function showFieldError(el, errorEl, msg) {
+        el.classList.add('invalid');
+        errorEl.textContent = msg;
+        errorEl.classList.add('visible');
+      }
+
+      function clearFieldError(el, errorEl) {
+        el.classList.remove('invalid');
+        errorEl.classList.remove('visible');
+        errorEl.textContent = '';
+      }
+
+      function validate() {
+        let valid = true;
+        const email = emailInput.value.trim();
+        const pw    = pwInput.value;
+
+        clearFieldError(emailInput, emailErr);
+        clearFieldError(pwInput, pwErr);
+
+        if (!email) {
+          showFieldError(emailInput, emailErr, 'Email address is required');
+          valid = false;
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showFieldError(emailInput, emailErr, 'Please enter a valid email address');
+          valid = false;
+        }
+
+        if (!pw) {
+          showFieldError(pwInput, pwErr, 'Password is required');
+          valid = false;
+        } else if (pw.length < 6) {
+          showFieldError(pwInput, pwErr, 'Password must be at least 6 characters');
+          valid = false;
+        }
+
+        return valid;
+      }
+
+      /* ─────────────────────────────────────────────
+         FETCH WITH TIMEOUT
+         ───────────────────────────────────────────── */
+      async function fetchWithTimeout(url, options = {}) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), CONFIG.TIMEOUT_MS);
+
+        try {
+          const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+          return response;
+        } catch (err) {
+          clearTimeout(timeoutId);
+          throw err;
+        }
+      }
+
+      /* ─────────────────────────────────────────────
+         AUTH HELPER — attach token to any future call
+         ───────────────────────────────────────────── */
+      /**
+       * Make an authenticated API request.
+       * Usage:
+       *   const data = await authFetch('/api/auth/profile');
+       *   const data = await authFetch('/api/something', { method: 'POST', body: JSON.stringify({...}) });
+       */
+      window.authFetch = async function (endpoint, options = {}) {
+        const token = localStorage.getItem(CONFIG.STORAGE_KEYS.accessToken);
+        const headers = {
+          'Content-Type': 'application/json',
+          ...(options.headers || {}),
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const res = await fetchWithTimeout(CONFIG.API_BASE_URL + endpoint, {
+          ...options,
+          headers,
+        });
+
+        if (res.status === 401) {
+          // Token expired — clear session
+          Object.values(CONFIG.STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
+          showToast('Session expired — please login again', 'error');
+        }
+
+        return res.json();
+      };
+
+      /* ─────────────────────────────────────────────
+         LOGIN HANDLER
+         ───────────────────────────────────────────── */
+      async function handleLogin(e) {
+        e.preventDefault();
+        if (!validate()) return;
+
+        // UI: loading state
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+
+        const email    = emailInput.value.trim().toLowerCase();
+        const password = pwInput.value;
+
+        try {
+          const res = await fetchWithTimeout(
+            CONFIG.API_BASE_URL + CONFIG.LOGIN_ENDPOINT,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password }),
+            }
+          );
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            // Server returned an error
+            const detail = data.detail || '';
+            const msg = Array.isArray(detail)
+              ? detail.map(e => e.msg).join(', ')
+              : detail || 'Login failed. Please check your credentials.';
+            showToast(msg, 'error');
+            return;
+          }
+
+          // ──── Success ────
+          // 1. Persist auth data to localStorage
+          const { access_token, refresh_token, user_id } = data;
+          const keys = CONFIG.STORAGE_KEYS;
+
+          localStorage.setItem(keys.accessToken,  access_token);
+          localStorage.setItem(keys.refreshToken, refresh_token);
+          localStorage.setItem(keys.userId,       user_id);
+          localStorage.setItem(keys.loginTime,    new Date().toISOString());
+          // Store the full payload for downstream consumers
+          localStorage.setItem(keys.authPayload,  JSON.stringify(data));
+
+          const requiresFace = data.requires_face_verification !== false;
+
+          showToast(
+            requiresFace
+              ? 'Password verified! Redirecting to face verification...'
+              : 'Login successful! Redirecting to dashboard...',
+            'success'
+          );
+
+          // 2. Build redirect URL — pass tokens so the React app can consume them
+          const redirectUrl = new URL(CONFIG.REDIRECT_URL);
+          redirectUrl.searchParams.set('access_token',  access_token);
+          redirectUrl.searchParams.set('refresh_token', refresh_token);
+          redirectUrl.searchParams.set('user_id',       user_id);
+          redirectUrl.searchParams.set('requires_face', requiresFace ? 'true' : 'false');
+          redirectUrl.searchParams.set('source',        'external_login');
+
+          // 3. Redirect after a brief pause so the user sees the success toast
+          setTimeout(() => {
+            window.location.href = redirectUrl.toString();
+          }, 1200);
+
+        } catch (err) {
+          if (err.name === 'AbortError') {
+            showToast('Request timed out — the server may be starting up. Please try again.', 'error');
+          } else {
+            showToast('Network error — please check your connection and try again.', 'error');
+          }
+        } finally {
+          submitBtn.classList.remove('loading');
+          submitBtn.disabled = false;
+        }
+      }
+
+      /* ─────────────────────────────────────────────
+         PASSWORD TOGGLE
+         ───────────────────────────────────────────── */
+      let pwVisible = false;
+      pwToggle.addEventListener('click', () => {
+        pwVisible = !pwVisible;
+        pwInput.type = pwVisible ? 'text' : 'password';
+        const icon = $('#eyeIcon');
+        if (pwVisible) {
+          icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+        } else {
+          icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+        }
+      });
+
+      /* ─────────────────────────────────────────────
+         CLEAR ERRORS ON INPUT
+         ───────────────────────────────────────────── */
+      emailInput.addEventListener('input', () => clearFieldError(emailInput, emailErr));
+      pwInput.addEventListener('input',    () => clearFieldError(pwInput, pwErr));
+
+      /* ─────────────────────────────────────────────
+         INIT
+         ───────────────────────────────────────────── */
+      form.addEventListener('submit', handleLogin);
+
+      // Auto-redirect if already logged in
+      if (localStorage.getItem(CONFIG.STORAGE_KEYS.accessToken)) {
+        window.location.href = CONFIG.REDIRECT_URL;
+      }
+
+      // Wake up the free-tier backend immediately
+      checkServerHealth();
+    })();
+  </script>
+</body>
+</html>
