@@ -119,8 +119,6 @@ async def verify_face(
 
     if is_verified:
         logger.info(f"Face verified for user: {request.user_id}")
-        # Record login session after successful face verification
-        await auth_service.record_login_for_face_verified(request.user_id)
     else:
         logger.warning(f"Face verification failed for user: {request.user_id}")
 

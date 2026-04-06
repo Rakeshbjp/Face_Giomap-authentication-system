@@ -303,12 +303,13 @@ class AuthService:
                 "user_id": user_id,
             }
 
+            # Record login session for ALL users at password login time
+            await self._record_login(user_id, location)
+
             if requires_face:
                 logger.info(f"Password + location OK for user: {user_id} — face verification required")
                 return True, "Password verified. Face verification required.", token_data
             else:
-                # Record login session for password-only users
-                await self._record_login(user_id, location)
                 logger.info(f"Password + location OK for user: {user_id} — no face data, login complete")
                 return True, "Login successful.", token_data
 
