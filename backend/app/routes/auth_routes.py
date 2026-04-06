@@ -119,6 +119,8 @@ async def verify_face(
 
     if is_verified:
         logger.info(f"Face verified for user: {request.user_id}")
+        # Record login session after successful face verification
+        await auth_service.record_login_for_face_verified(request.user_id)
     else:
         logger.warning(f"Face verification failed for user: {request.user_id}")
 
@@ -336,4 +338,41 @@ async def update_face_data(
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy", "service": "Face Auth API"}
+
+
+# ──────────────────────────────────────────────
+#  POST /api/auth/logout
+# ──────────────────────────────────────────────
+
+@router.post("/logout", response_model=StandardResponse)
+async def logout_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db=Depends(get_database),
+):
+    """Record logout time for the authenticated user."""
+    payload = await get_current_user(credentials)
+    user_id = payload.get("sub")
+
+    auth_service = AuthService(db)
+    await auth_service.record_logout(user_id)
+
+    logger.info(f"User logged out: {user_id}")
+    return StandardResponse(status=True, message="Logged out successfully")
+
+
+# ──────────────────────────────────────────────
+#  POST /api/auth/geocode
+# ──────────────────────────────────────────────
+
+class GeocodeRequest(BaseModel):
+    latitude: float
+    longitude: float
+
+
+@router.post("/geocode")
+async def geocode_location(request: GeocodeRequest):
+    """Reverse-geocode a lat/lng to a human-readable address."""
+    from app.utils.geocoding import reverse_geocode
+    result = await reverse_geocode(request.latitude, request.longitude)
+    return {"status": True, "data": result}
 

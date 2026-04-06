@@ -96,3 +96,28 @@ export const updateFaceData = async (faceImages) => {
   const response = await api.put('/auth/update-face', { face_images: faceImages });
   return response.data;
 };
+
+/**
+ * Logout — records logout time in the database.
+ * @returns {Promise} API response
+ */
+export const logoutUser = async () => {
+  try {
+    const response = await api.post('/auth/logout');
+    return response.data;
+  } catch {
+    // Silently fail — user is logging out anyway
+    return { status: false };
+  }
+};
+
+/**
+ * Reverse-geocode latitude/longitude to human-readable address.
+ * @param {number} latitude
+ * @param {number} longitude
+ * @returns {Promise} { area, city, state, country, pincode, display_name }
+ */
+export const geocodeLocation = async (latitude, longitude) => {
+  const response = await api.post('/auth/geocode', { latitude, longitude });
+  return response.data;
+};

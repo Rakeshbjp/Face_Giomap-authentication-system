@@ -2,7 +2,7 @@
  * Authentication context providing user state across the application.
  */
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { getProfile, healthCheck } from '../services/authService';
+import { getProfile, healthCheck, logoutUser } from '../services/authService';
 
 const AuthContext = createContext(null);
 
@@ -92,7 +92,9 @@ export const AuthProvider = ({ children }) => {
   /**
    * Clear all auth state and tokens.
    */
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    // Record logout on backend (fire-and-forget)
+    logoutUser().catch(() => {});
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_id');

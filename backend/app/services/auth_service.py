@@ -16,6 +16,7 @@ from app.config.settings import get_settings
 from app.models.user import UserDocument
 from app.services.face_recognition import face_service
 from app.utils.encryption import encrypt_embeddings, decrypt_embeddings
+from app.utils.geocoding import reverse_geocode
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -197,6 +198,13 @@ class AuthService:
             else:
                 logger.info("Registering user without face data (no camera available)")
 
+            # Reverse-geocode the registered location
+            registered_address = None
+            if location:
+                registered_address = await reverse_geocode(
+                    location["latitude"], location["longitude"]
+                )
+
             # Create user document
             user_doc = {
                 "name": name,
@@ -205,7 +213,11 @@ class AuthService:
                 "password_hash": password_hash,
                 "face_embeddings": encrypted_embeddings,
                 "registered_location": location,
+                "registered_address": registered_address,
                 "liveness_verified": liveness_verified,
+                "login_sessions": [],
+                "last_login_at": None,
+                "last_logout_at": None,
                 "created_at": datetime.utcnow(),
                 "updated_at": datetime.utcnow(),
             }
@@ -295,6 +307,8 @@ class AuthService:
                 logger.info(f"Password + location OK for user: {user_id} — face verification required")
                 return True, "Password verified. Face verification required.", token_data
             else:
+                # Record login session for password-only users
+                await self._record_login(user_id, location)
                 logger.info(f"Password + location OK for user: {user_id} — no face data, login complete")
                 return True, "Login successful.", token_data
 
@@ -376,7 +390,100 @@ class AuthService:
                 # Add a flag telling the frontend whether face data exists
                 face_emb = user.pop("face_embedding", None)
                 user["has_face_data"] = bool(face_emb)
+                # Convert datetime to ISO strings for JSON serialisation
+                for key in ["created_at", "updated_at", "last_login_at", "last_logout_at"]:
+                    if isinstance(user.get(key), datetime):
+                        user[key] = user[key].isoformat()
+                # Convert login_sessions datetimes
+                for session in user.get("login_sessions", []):
+                    for k in ["login_at", "logout_at"]:
+                        if isinstance(session.get(k), datetime):
+                            session[k] = session[k].isoformat()
             return user
         except Exception as e:
             logger.error(f"Error fetching user: {e}")
             return None
+
+    # ──────────────────────────────────────────────
+    #  Login/Logout Session Tracking
+    # ──────────────────────────────────────────────
+
+    async def _record_login(self, user_id: str, location: Optional[dict] = None):
+        """Record login time, location, and reverse-geocoded address in the user document."""
+        try:
+            now = datetime.utcnow()
+            login_address = None
+            if location:
+                login_address = await reverse_geocode(
+                    location["latitude"], location["longitude"]
+                )
+
+            session_entry = {
+                "login_at": now,
+                "logout_at": None,
+                "location": location,
+                "address": login_address,
+            }
+
+            await self.users_collection.update_one(
+                {"_id": ObjectId(user_id)},
+                {
+                    "$set": {
+                        "last_login_at": now,
+                        "last_login_location": location,
+                        "last_login_address": login_address,
+                    },
+                    "$push": {
+                        "login_sessions": {
+                            "$each": [session_entry],
+                            "$slice": -20,  # keep last 20 sessions
+                        }
+                    },
+                },
+            )
+            logger.info(f"Login session recorded for user: {user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to record login session: {e}")
+
+    async def record_login_for_face_verified(self, user_id: str):
+        """Called after face verification completes to record the login session."""
+        # Get stored login location from the last password login attempt
+        try:
+            user = await self.users_collection.find_one(
+                {"_id": ObjectId(user_id)},
+                {"registered_location": 1}
+            )
+            location = user.get("registered_location") if user else None
+            await self._record_login(user_id, location)
+        except Exception as e:
+            logger.warning(f"Failed to record face-verified login: {e}")
+
+    async def record_logout(self, user_id: str):
+        """Record logout time for the user's most recent session."""
+        try:
+            now = datetime.utcnow()
+            # Update the last session's logout_at
+            user = await self.users_collection.find_one(
+                {"_id": ObjectId(user_id)},
+                {"login_sessions": 1},
+            )
+            if user and user.get("login_sessions"):
+                sessions = user["login_sessions"]
+                sessions[-1]["logout_at"] = now
+                await self.users_collection.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {
+                        "$set": {
+                            "last_logout_at": now,
+                            "login_sessions": sessions,
+                        }
+                    },
+                )
+            else:
+                await self.users_collection.update_one(
+                    {"_id": ObjectId(user_id)},
+                    {"$set": {"last_logout_at": now}},
+                )
+            logger.info(f"Logout recorded for user: {user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to record logout: {e}")

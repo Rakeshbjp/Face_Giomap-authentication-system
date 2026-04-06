@@ -3,12 +3,13 @@
  *
  * Shows the user's current position on an interactive OpenStreetMap.
  * If the user is logged in and has a registered location, it also shows
- * that location and the distance between them.
+ * that location, the distance between them, and area names via reverse geocoding.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import useGeolocation from '../hooks/useGeolocation';
 import LocationMap from '../components/map/LocationMap';
 import { useAuth } from '../context/AuthContext';
+import { geocodeLocation } from '../services/authService';
 
 /**
  * Haversine distance in metres.
@@ -29,6 +30,36 @@ const LocationPage = () => {
   const { user } = useAuth();
 
   const registeredLocation = user?.registered_location || null;
+  const registeredAddress = user?.registered_address || null;
+
+  // Reverse-geocoded address for current live location
+  const [currentAddress, setCurrentAddress] = useState(null);
+  const [addressLoading, setAddressLoading] = useState(false);
+
+  // Fetch address when position changes significantly
+  useEffect(() => {
+    if (!position) return;
+    let cancelled = false;
+    const fetchAddress = async () => {
+      setAddressLoading(true);
+      try {
+        const result = await geocodeLocation(position.latitude, position.longitude);
+        if (!cancelled && result?.data) {
+          setCurrentAddress(result.data);
+        }
+      } catch {
+        // fallback silently
+      } finally {
+        if (!cancelled) setAddressLoading(false);
+      }
+    };
+    fetchAddress();
+    return () => { cancelled = true; };
+  }, [
+    // Only re-fetch when position changes by ~0.001° (~100m)
+    position ? Math.round(position.latitude * 1000) : null,
+    position ? Math.round(position.longitude * 1000) : null,
+  ]);
 
   const distance = useMemo(() => {
     if (!position || !registeredLocation) return null;
@@ -124,11 +155,25 @@ const LocationPage = () => {
               </div>
             ) : position ? (
               <div className="text-white">
-              <p className="text-sm sm:text-lg font-mono font-bold">{position.latitude.toFixed(6)}</p>
+                <p className="text-sm sm:text-lg font-mono font-bold">{position.latitude.toFixed(6)}</p>
                 <p className="text-sm sm:text-lg font-mono font-bold">{position.longitude.toFixed(6)}</p>
                 {position.accuracy && (
                   <p className="text-xs text-white/50 mt-1">Accuracy: ±{position.accuracy.toFixed(0)}m</p>
                 )}
+                {/* Area name */}
+                {addressLoading ? (
+                  <p className="text-xs text-blue-300 mt-2 flex items-center gap-1">
+                    <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin inline-block" />
+                    Detecting area...
+                  </p>
+                ) : currentAddress?.area ? (
+                  <div className="mt-2 pt-2 border-t border-white/10">
+                    <p className="text-sm text-blue-300 font-medium">📍 {currentAddress.area}</p>
+                    <p className="text-xs text-white/50">
+                      {[currentAddress.city, currentAddress.state].filter(Boolean).join(', ')}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -144,6 +189,15 @@ const LocationPage = () => {
                 <p className="text-sm sm:text-lg font-mono font-bold">{registeredLocation.latitude.toFixed(6)}</p>
                 <p className="text-sm sm:text-lg font-mono font-bold">{registeredLocation.longitude.toFixed(6)}</p>
                 <p className="text-xs text-white/50 mt-1">Login locked to this area (100m radius)</p>
+                {/* Registered area name */}
+                {registeredAddress?.area ? (
+                  <div className="mt-2 pt-2 border-t border-white/10">
+                    <p className="text-sm text-green-300 font-medium">📍 {registeredAddress.area}</p>
+                    <p className="text-xs text-white/50">
+                      {[registeredAddress.city, registeredAddress.state, registeredAddress.pincode].filter(Boolean).join(', ')}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <p className="text-white/60 text-sm">No registered location yet. Register a new account to lock your location.</p>

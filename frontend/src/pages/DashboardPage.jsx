@@ -1,12 +1,14 @@
 /**
  * Dashboard Page — Protected route shown after full authentication.
- * Includes option to add/update face data if missing.
+ * Shows user info, session tracking (login/logout times), live location with
+ * full address, and option to add/update face data.
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import FaceCaptureRegistration from '../components/face/FaceCaptureRegistration';
-import { updateFaceData } from '../services/authService';
+import { updateFaceData, geocodeLocation } from '../services/authService';
+import useGeolocation from '../hooks/useGeolocation';
 import Spinner from '../components/ui/Spinner';
 
 const DashboardPage = () => {
@@ -15,6 +17,29 @@ const DashboardPage = () => {
   const [isUpdating, setIsUpdating] = useState(false);
 
   const hasFaceData = user?.has_face_data ?? user?.liveness_verified ?? false;
+
+  // Live location for address display
+  const { position: geoPos } = useGeolocation({ watch: false });
+  const [liveAddress, setLiveAddress] = useState(null);
+  const [addressLoading, setAddressLoading] = useState(false);
+
+  useEffect(() => {
+    if (!geoPos) return;
+    let cancelled = false;
+    const fetchAddr = async () => {
+      setAddressLoading(true);
+      try {
+        const res = await geocodeLocation(geoPos.latitude, geoPos.longitude);
+        if (!cancelled && res?.data) setLiveAddress(res.data);
+      } catch { /* silent */ }
+      finally { if (!cancelled) setAddressLoading(false); }
+    };
+    fetchAddr();
+    return () => { cancelled = true; };
+  }, [
+    geoPos ? Math.round(geoPos.latitude * 1000) : null,
+    geoPos ? Math.round(geoPos.longitude * 1000) : null,
+  ]);
 
   /**
    * Handle face capture completion — send to update-face endpoint.
@@ -37,6 +62,22 @@ const DashboardPage = () => {
       setIsUpdating(false);
     }
   }, []);
+
+  // Format datetime string to readable format
+  const formatDateTime = (isoStr) => {
+    if (!isoStr) return 'N/A';
+    const d = new Date(isoStr);
+    return d.toLocaleString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: true,
+    });
+  };
+
+  // Get the latest login session
+  const latestSession = user?.login_sessions?.length
+    ? user.login_sessions[user.login_sessions.length - 1]
+    : null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -84,6 +125,104 @@ const DashboardPage = () => {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* ── Session & Location Card ── */}
+        <div className="bg-white rounded-2xl shadow-lg p-8 mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-5 flex items-center gap-2">
+            <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Session & Location Info
+          </h2>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+            {/* Login Time */}
+            <div className="bg-green-50 rounded-xl p-4 border border-green-100">
+              <p className="text-xs text-green-600 uppercase tracking-wider mb-1 font-semibold flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14" />
+                </svg>
+                Login Time
+              </p>
+              <p className="text-gray-900 font-medium text-sm">
+                {formatDateTime(user?.last_login_at || latestSession?.login_at)}
+              </p>
+            </div>
+
+            {/* Logout Time */}
+            <div className="bg-red-50 rounded-xl p-4 border border-red-100">
+              <p className="text-xs text-red-600 uppercase tracking-wider mb-1 font-semibold flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7" />
+                </svg>
+                Last Logout Time
+              </p>
+              <p className="text-gray-900 font-medium text-sm">
+                {formatDateTime(user?.last_logout_at)}
+              </p>
+            </div>
+          </div>
+
+          {/* Live Location */}
+          <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+            <p className="text-xs text-blue-600 uppercase tracking-wider mb-2 font-semibold flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Live Location
+            </p>
+            {addressLoading || !geoPos ? (
+              <div className="flex items-center gap-2 text-sm text-blue-500">
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+                {geoPos ? 'Resolving address...' : 'Getting GPS location...'}
+              </div>
+            ) : liveAddress ? (
+              <div className="space-y-1.5">
+                {liveAddress.area && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-400 mt-0.5">📍</span>
+                    <div>
+                      <p className="text-gray-900 font-semibold">{liveAddress.area}</p>
+                      <p className="text-gray-600 text-sm">
+                        {[liveAddress.city, liveAddress.state, liveAddress.country]
+                          .filter(Boolean)
+                          .join(', ')}
+                      </p>
+                      {liveAddress.pincode && (
+                        <p className="text-gray-500 text-xs mt-0.5">
+                          Pincode: <span className="font-mono font-semibold">{liveAddress.pincode}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <p className="text-xs text-blue-400 font-mono mt-1">
+                  {geoPos.latitude.toFixed(6)}, {geoPos.longitude.toFixed(6)}
+                </p>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-sm">Location not available</p>
+            )}
+          </div>
+
+          {/* Login session address (from DB) */}
+          {latestSession?.address && (
+            <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
+              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1 font-semibold">Login Location (recorded)</p>
+              <p className="text-gray-800 text-sm font-medium">
+                {latestSession.address.area && `${latestSession.address.area}, `}
+                {latestSession.address.city && `${latestSession.address.city}, `}
+                {latestSession.address.state && `${latestSession.address.state}, `}
+                {latestSession.address.country}
+                {latestSession.address.pincode && ` - ${latestSession.address.pincode}`}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Face Data Setup Card — shown when no face data exists */}
