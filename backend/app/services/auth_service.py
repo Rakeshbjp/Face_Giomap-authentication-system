@@ -391,6 +391,14 @@ class AuthService:
                 # Add a flag telling the frontend whether face data exists
                 face_emb = user.pop("face_embedding", None)
                 user["has_face_data"] = bool(face_emb)
+
+                # Ensure session tracking fields exist (for users registered before this feature)
+                user.setdefault("last_login_at", None)
+                user.setdefault("last_logout_at", None)
+                user.setdefault("login_sessions", [])
+                user.setdefault("registered_address", None)
+                user.setdefault("last_login_address", None)
+
                 # Convert datetime to ISO strings for JSON serialisation
                 for key in ["created_at", "updated_at", "last_login_at", "last_logout_at"]:
                     if isinstance(user.get(key), datetime):

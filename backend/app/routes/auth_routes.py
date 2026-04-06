@@ -207,6 +207,10 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         access_token = AuthService.create_access_token(resolved_id, user["email"])
         refresh_token = AuthService.create_refresh_token(resolved_id)
 
+        # Record login session for face-login users
+        login_loc = request.location.model_dump() if request.location else None
+        await auth_service._record_login(resolved_id, login_loc)
+
         return {
             "status": True,
             "message": "Face Verified",
