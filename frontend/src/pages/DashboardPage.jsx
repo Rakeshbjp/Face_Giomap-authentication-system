@@ -66,8 +66,11 @@ const DashboardPage = () => {
   // Format datetime string to readable format
   const formatDateTime = (isoStr) => {
     if (!isoStr) return 'N/A';
-    const d = new Date(isoStr);
+    // Backend stores UTC without 'Z' — append it so the browser knows it's UTC
+    const utcStr = isoStr.endsWith('Z') ? isoStr : isoStr + 'Z';
+    const d = new Date(utcStr);
     return d.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: '2-digit', month: 'short', year: 'numeric',
       hour: '2-digit', minute: '2-digit', second: '2-digit',
       hour12: true,

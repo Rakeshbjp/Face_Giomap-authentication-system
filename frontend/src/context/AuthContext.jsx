@@ -93,8 +93,13 @@ export const AuthProvider = ({ children }) => {
    * Clear all auth state and tokens.
    */
   const logout = useCallback(async () => {
-    // Record logout on backend (fire-and-forget)
-    logoutUser().catch(() => {});
+    // Record logout on backend FIRST (needs the JWT token still in localStorage)
+    try {
+      await logoutUser();
+    } catch {
+      // Ignore errors — user is logging out anyway
+    }
+    // Now clear local state
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
     localStorage.removeItem('user_id');
