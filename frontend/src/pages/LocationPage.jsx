@@ -166,12 +166,20 @@ const LocationPage = () => {
                     <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin inline-block" />
                     Detecting area...
                   </p>
-                ) : currentAddress?.area ? (
+                ) : currentAddress?.area || currentAddress?.road ? (
                   <div className="mt-2 pt-2 border-t border-white/10">
-                    <p className="text-sm text-blue-300 font-medium">📍 {currentAddress.area}</p>
-                    <p className="text-xs text-white/50">
-                      {[currentAddress.city, currentAddress.state].filter(Boolean).join(', ')}
+                    {currentAddress.road && (
+                      <p className="text-sm text-blue-300 font-medium">📍 {currentAddress.road}</p>
+                    )}
+                    <p className="text-xs text-white/70">
+                      {[currentAddress.area, currentAddress.suburb].filter(Boolean).join(', ')}
                     </p>
+                    <p className="text-xs text-white/50">
+                      {[currentAddress.city, currentAddress.district && currentAddress.district !== currentAddress.city ? currentAddress.district : null, currentAddress.state].filter(Boolean).join(', ')}
+                    </p>
+                    {currentAddress.pincode && (
+                      <p className="text-xs text-white/40 mt-0.5">PIN: {currentAddress.pincode}</p>
+                    )}
                   </div>
                 ) : null}
               </div>
@@ -190,9 +198,14 @@ const LocationPage = () => {
                 <p className="text-sm sm:text-lg font-mono font-bold">{registeredLocation.longitude.toFixed(6)}</p>
                 <p className="text-xs text-white/50 mt-1">Login locked to this area (100m radius)</p>
                 {/* Registered area name */}
-                {registeredAddress?.area ? (
+                {registeredAddress?.area || registeredAddress?.road ? (
                   <div className="mt-2 pt-2 border-t border-white/10">
-                    <p className="text-sm text-green-300 font-medium">📍 {registeredAddress.area}</p>
+                    {registeredAddress.road && (
+                      <p className="text-sm text-green-300 font-medium">📍 {registeredAddress.road}</p>
+                    )}
+                    <p className="text-xs text-white/70">
+                      {[registeredAddress.area, registeredAddress.suburb].filter(Boolean).join(', ')}
+                    </p>
                     <p className="text-xs text-white/50">
                       {[registeredAddress.city, registeredAddress.state, registeredAddress.pincode].filter(Boolean).join(', ')}
                     </p>

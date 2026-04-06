@@ -185,25 +185,38 @@ const DashboardPage = () => {
                 {geoPos ? 'Resolving address...' : 'Getting GPS location...'}
               </div>
             ) : liveAddress ? (
-              <div className="space-y-1.5">
-                {liveAddress.area && (
-                  <div className="flex items-start gap-2">
-                    <span className="text-blue-400 mt-0.5">📍</span>
-                    <div>
-                      <p className="text-gray-900 font-semibold">{liveAddress.area}</p>
-                      <p className="text-gray-600 text-sm">
-                        {[liveAddress.city, liveAddress.state, liveAddress.country]
-                          .filter(Boolean)
-                          .join(', ')}
+              <div className="space-y-1">
+                <div className="flex items-start gap-2">
+                  <span className="text-blue-400 mt-0.5">📍</span>
+                  <div>
+                    {/* Road / Street */}
+                    {liveAddress.road && (
+                      <p className="text-gray-900 font-semibold text-sm">{liveAddress.road}</p>
+                    )}
+                    {/* Area (neighbourhood) */}
+                    {liveAddress.area && (
+                      <p className="text-gray-800 font-medium text-sm">
+                        {liveAddress.area}
+                        {liveAddress.suburb ? `, ${liveAddress.suburb}` : ''}
                       </p>
-                      {liveAddress.pincode && (
-                        <p className="text-gray-500 text-xs mt-0.5">
-                          Pincode: <span className="font-mono font-semibold">{liveAddress.pincode}</span>
-                        </p>
-                      )}
-                    </div>
+                    )}
+                    {/* City, District, State, Country */}
+                    <p className="text-gray-600 text-sm">
+                      {[
+                        liveAddress.city,
+                        liveAddress.district && liveAddress.district !== liveAddress.city ? liveAddress.district : null,
+                        liveAddress.state,
+                        liveAddress.country,
+                      ].filter(Boolean).join(', ')}
+                    </p>
+                    {/* Pincode */}
+                    {liveAddress.pincode && (
+                      <p className="text-gray-500 text-xs mt-0.5">
+                        Pincode: <span className="font-mono font-semibold">{liveAddress.pincode}</span>
+                      </p>
+                    )}
                   </div>
-                )}
+                </div>
                 <p className="text-xs text-blue-400 font-mono mt-1">
                   {geoPos.latitude.toFixed(6)}, {geoPos.longitude.toFixed(6)}
                 </p>
@@ -218,10 +231,16 @@ const DashboardPage = () => {
             <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1 font-semibold">Login Location (recorded)</p>
               <p className="text-gray-800 text-sm font-medium">
-                {latestSession.address.area && `${latestSession.address.area}, `}
-                {latestSession.address.city && `${latestSession.address.city}, `}
-                {latestSession.address.state && `${latestSession.address.state}, `}
-                {latestSession.address.country}
+                {[
+                  latestSession.address.road,
+                  latestSession.address.area,
+                  latestSession.address.suburb,
+                  latestSession.address.city,
+                  latestSession.address.district && latestSession.address.district !== latestSession.address.city
+                    ? latestSession.address.district : null,
+                  latestSession.address.state,
+                  latestSession.address.country,
+                ].filter(Boolean).join(', ')}
                 {latestSession.address.pincode && ` - ${latestSession.address.pincode}`}
               </p>
             </div>
