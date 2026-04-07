@@ -175,18 +175,30 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
                 )
                 if dist > LOCATION_RADIUS_M:
                     from app.utils.geocoding import reverse_geocode
-                    reg_address = await reverse_geocode(reg_loc["latitude"], reg_loc["longitude"])
-                    cur_address = await reverse_geocode(login_loc["latitude"], login_loc["longitude"])
 
+                    # Use STORED registered address from DB
+                    stored_reg_addr = user_doc.get("registered_address") or {}
                     reg_area = ", ".join(filter(None, [
-                        reg_address.get("road"), reg_address.get("area"),
-                        reg_address.get("city"), reg_address.get("state"),
-                    ])) or f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})"
+                        stored_reg_addr.get("road"),
+                        stored_reg_addr.get("area"),
+                        stored_reg_addr.get("suburb"),
+                        stored_reg_addr.get("city"),
+                        stored_reg_addr.get("state"),
+                    ]))
+                    if not reg_area:
+                        reg_area = stored_reg_addr.get("display_name") or f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})"
 
+                    # Geocode ONLY current location fresh
+                    cur_address = await reverse_geocode(login_loc["latitude"], login_loc["longitude"])
                     cur_area = ", ".join(filter(None, [
-                        cur_address.get("road"), cur_address.get("area"),
-                        cur_address.get("city"), cur_address.get("state"),
-                    ])) or f"({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f})"
+                        cur_address.get("road"),
+                        cur_address.get("area"),
+                        cur_address.get("suburb"),
+                        cur_address.get("city"),
+                        cur_address.get("state"),
+                    ]))
+                    if not cur_area:
+                        cur_area = cur_address.get("display_name") or f"({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f})"
 
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,

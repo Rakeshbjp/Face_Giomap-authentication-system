@@ -261,6 +261,20 @@ class AuthService:
 
             # ── Location check ──
             reg_loc = user.get("registered_location")
+
+            # Backfill: if user has location but no stored address, geocode and save it now
+            if reg_loc and not user.get("registered_address"):
+                try:
+                    backfill_addr = await reverse_geocode(reg_loc["latitude"], reg_loc["longitude"])
+                    await self.users_collection.update_one(
+                        {"_id": user["_id"]},
+                        {"$set": {"registered_address": backfill_addr}},
+                    )
+                    user["registered_address"] = backfill_addr
+                    logger.info(f"Backfilled registered_address for user {user['_id']}")
+                except Exception as e:
+                    logger.warning(f"Failed to backfill registered_address: {e}")
+
             if reg_loc and location:
                 dist = haversine_distance(
                     reg_loc["latitude"], reg_loc["longitude"],
@@ -268,19 +282,30 @@ class AuthService:
                 )
                 logger.info(f"Location distance: {dist:.0f}m (limit: {LOCATION_RADIUS_M}m)")
                 if dist > LOCATION_RADIUS_M:
-                    # Reverse-geocode both locations for human-readable area names
-                    reg_address = await reverse_geocode(reg_loc["latitude"], reg_loc["longitude"])
-                    cur_address = await reverse_geocode(location["latitude"], location["longitude"])
-
+                    # Use the STORED registered address from MongoDB (geocoded once at registration)
+                    stored_reg_addr = user.get("registered_address") or {}
                     reg_area = ", ".join(filter(None, [
-                        reg_address.get("road"), reg_address.get("area"),
-                        reg_address.get("city"), reg_address.get("state"),
-                    ])) or f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})"
+                        stored_reg_addr.get("road"),
+                        stored_reg_addr.get("area"),
+                        stored_reg_addr.get("suburb"),
+                        stored_reg_addr.get("city"),
+                        stored_reg_addr.get("state"),
+                    ]))
+                    # Fallback: use display_name or coordinates
+                    if not reg_area:
+                        reg_area = stored_reg_addr.get("display_name") or f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})"
 
+                    # Reverse-geocode ONLY the current location (fresh GPS)
+                    cur_address = await reverse_geocode(location["latitude"], location["longitude"])
                     cur_area = ", ".join(filter(None, [
-                        cur_address.get("road"), cur_address.get("area"),
-                        cur_address.get("city"), cur_address.get("state"),
-                    ])) or f"({location['latitude']:.6f}, {location['longitude']:.6f})"
+                        cur_address.get("road"),
+                        cur_address.get("area"),
+                        cur_address.get("suburb"),
+                        cur_address.get("city"),
+                        cur_address.get("state"),
+                    ]))
+                    if not cur_area:
+                        cur_area = cur_address.get("display_name") or f"({location['latitude']:.6f}, {location['longitude']:.6f})"
 
                     return (
                         False,
