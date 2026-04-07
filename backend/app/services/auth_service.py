@@ -17,6 +17,7 @@ from app.models.user import UserDocument
 from app.services.face_recognition import face_service
 from app.utils.encryption import encrypt_embeddings, decrypt_embeddings
 from app.utils.geocoding import reverse_geocode
+from app.utils.email_service import send_auth_email
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -230,10 +231,37 @@ class AuthService:
                 msg += " (without face data — you can add it later)"
 
             logger.info(f"User registered successfully: {user_id} (face_data={has_face_data})")
+
+            # Send registration success email (fire-and-forget)
+            try:
+                await send_auth_email(
+                    api_key=settings.RESEND_API_KEY,
+                    to_email=email,
+                    user_name=name,
+                    event="register_success",
+                    address=registered_address,
+                )
+            except Exception as mail_err:
+                logger.warning(f"Email notification failed: {mail_err}")
+
             return True, msg, user_id
 
         except Exception as e:
             logger.error(f"Registration failed: {e}")
+
+            # Send registration failure email (fire-and-forget)
+            try:
+                await send_auth_email(
+                    api_key=settings.RESEND_API_KEY,
+                    to_email=email,
+                    user_name=name,
+                    event="register_fail",
+                    address=None,
+                    extra_message=str(e),
+                )
+            except Exception:
+                pass
+
             return False, f"Registration failed: {str(e)}", None
 
     # ──────────────────────────────────────────────
@@ -257,6 +285,22 @@ class AuthService:
                 return False, "Invalid email or password", None
 
             if not self.verify_password(password, user["password_hash"]):
+                # Send login failure email
+                try:
+                    stored_addr = user.get("registered_address")
+                    login_addr = None
+                    if location:
+                        login_addr = await reverse_geocode(location["latitude"], location["longitude"])
+                    await send_auth_email(
+                        api_key=settings.RESEND_API_KEY,
+                        to_email=email,
+                        user_name=user.get("name", email),
+                        event="login_fail",
+                        address=login_addr or stored_addr,
+                        extra_message="Invalid password entered.",
+                    )
+                except Exception:
+                    pass
                 return False, "Invalid email or password", None
 
             # ── Location check ──
@@ -307,6 +351,19 @@ class AuthService:
                     if not cur_area:
                         cur_area = cur_address.get("display_name") or f"({location['latitude']:.6f}, {location['longitude']:.6f})"
 
+                    # Send location mismatch email
+                    try:
+                        await send_auth_email(
+                            api_key=settings.RESEND_API_KEY,
+                            to_email=email,
+                            user_name=user.get("name", email),
+                            event="login_fail",
+                            address=cur_address,
+                            extra_message=f"Location mismatch! You are {dist:.0f}m away from your registered location ({reg_area}). Max allowed: {LOCATION_RADIUS_M}m.",
+                        )
+                    except Exception:
+                        pass
+
                     return (
                         False,
                         f"LOGIN FAILED — Location mismatch! "
@@ -345,10 +402,29 @@ class AuthService:
             # Record login session for ALL users at password login time
             await self._record_login(user_id, location)
 
+            # Get login address for email
+            login_address = None
+            if location:
+                try:
+                    login_address = await reverse_geocode(location["latitude"], location["longitude"])
+                except Exception:
+                    pass
+
             if requires_face:
                 logger.info(f"Password + location OK for user: {user_id} — face verification required")
                 return True, "Password verified. Face verification required.", token_data
             else:
+                # Send login success email (no face required)
+                try:
+                    await send_auth_email(
+                        api_key=settings.RESEND_API_KEY,
+                        to_email=email,
+                        user_name=user.get("name", email),
+                        event="login_success",
+                        address=login_address,
+                    )
+                except Exception:
+                    pass
                 logger.info(f"Password + location OK for user: {user_id} — no face data, login complete")
                 return True, "Login successful.", token_data
 
