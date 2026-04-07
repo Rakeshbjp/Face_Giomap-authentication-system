@@ -17,12 +17,6 @@ from app.models.user import UserDocument
 from app.services.face_recognition import face_service
 from app.utils.encryption import encrypt_embeddings, decrypt_embeddings
 from app.utils.geocoding import reverse_geocode
-from app.utils.email_service import (
-    send_registration_success_email,
-    send_registration_failed_email,
-    send_login_success_email,
-    send_login_failed_email,
-)
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -236,29 +230,10 @@ class AuthService:
                 msg += " (without face data — you can add it later)"
 
             logger.info(f"User registered successfully: {user_id} (face_data={has_face_data})")
-
-            # Send registration success email (fire-and-forget)
-            try:
-                await send_registration_success_email(
-                    name=name, email=email,
-                    address=registered_address, coords=location,
-                )
-            except Exception as mail_err:
-                logger.warning(f"Registration email failed: {mail_err}")
-
             return True, msg, user_id
 
         except Exception as e:
             logger.error(f"Registration failed: {e}")
-
-            # Send registration failure email (fire-and-forget)
-            try:
-                await send_registration_failed_email(
-                    email=email, reason=str(e), coords=location,
-                )
-            except Exception:
-                pass
-
             return False, f"Registration failed: {str(e)}", None
 
     # ──────────────────────────────────────────────
@@ -282,15 +257,6 @@ class AuthService:
                 return False, "Invalid email or password", None
 
             if not self.verify_password(password, user["password_hash"]):
-                # Send failed login email for wrong password
-                try:
-                    cur_addr = await reverse_geocode(location["latitude"], location["longitude"]) if location else None
-                    await send_login_failed_email(
-                        email=email, reason="Invalid password",
-                        address=cur_addr, coords=location,
-                    )
-                except Exception:
-                    pass
                 return False, "Invalid email or password", None
 
             # ── Location check ──
@@ -341,27 +307,17 @@ class AuthService:
                     if not cur_area:
                         cur_area = cur_address.get("display_name") or f"({location['latitude']:.6f}, {location['longitude']:.6f})"
 
-                    mismatch_msg = (
+                    return (
+                        False,
                         f"LOGIN FAILED — Location mismatch! "
                         f"You are {dist:.0f}m away from your registered location. "
                         f"Max allowed: {LOCATION_RADIUS_M}m. "
                         f"RegisteredArea: {reg_area}. "
                         f"CurrentArea: {cur_area}. "
                         f"You can only login from your registered location. "
-                        f"To login from this new location, you must register a new account first."
+                        f"To login from this new location, you must register a new account first.",
+                        None,
                     )
-
-                    # Send location mismatch email
-                    try:
-                        await send_login_failed_email(
-                            email=email,
-                            reason=f"Location mismatch — {dist:.0f}m away from registered location",
-                            address=cur_address, coords=location,
-                        )
-                    except Exception:
-                        pass
-
-                    return False, mismatch_msg, None
             elif reg_loc and not location:
                 return (
                     False,
@@ -391,19 +347,9 @@ class AuthService:
 
             if requires_face:
                 logger.info(f"Password + location OK for user: {user_id} — face verification required")
-                # Email will be sent after face verification completes (in routes)
                 return True, "Password verified. Face verification required.", token_data
             else:
                 logger.info(f"Password + location OK for user: {user_id} — no face data, login complete")
-                # Send login success email for password-only users
-                try:
-                    login_addr = await reverse_geocode(location["latitude"], location["longitude"]) if location else None
-                    await send_login_success_email(
-                        name=user.get("name", ""), email=email,
-                        address=login_addr, coords=location,
-                    )
-                except Exception:
-                    pass
                 return True, "Login successful.", token_data
 
         except Exception as e:

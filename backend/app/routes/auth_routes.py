@@ -119,35 +119,8 @@ async def verify_face(
 
     if is_verified:
         logger.info(f"Face verified for user: {request.user_id}")
-        # Send login success email after face verification
-        try:
-            from app.utils.email_service import send_login_success_email
-            user_data = await auth_service.get_user_by_id(request.user_id)
-            if user_data:
-                login_addr = user_data.get("last_login_address") or user_data.get("registered_address")
-                login_loc = user_data.get("registered_location")
-                await send_login_success_email(
-                    name=user_data.get("name", ""),
-                    email=user_data.get("email", ""),
-                    address=login_addr, coords=login_loc,
-                )
-        except Exception as mail_err:
-            logger.warning(f"Login success email failed: {mail_err}")
     else:
         logger.warning(f"Face verification failed for user: {request.user_id}")
-        # Send login failed email for face mismatch
-        try:
-            from app.utils.email_service import send_login_failed_email
-            user_data = await auth_service.get_user_by_id(request.user_id)
-            if user_data:
-                await send_login_failed_email(
-                    email=user_data.get("email", ""),
-                    reason="Face verification failed — face did not match registered data",
-                    address=user_data.get("registered_address"),
-                    coords=user_data.get("registered_location"),
-                )
-        except Exception:
-            pass
 
     return FaceVerificationResponse(
         status=is_verified,
@@ -251,17 +224,6 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         )
 
         if not is_verified:
-            # Send face-login failure email
-            try:
-                from app.utils.email_service import send_login_failed_email
-                await send_login_failed_email(
-                    email=user.get("email", "") if user else "",
-                    reason="Face verification failed — face did not match",
-                    address=user_doc.get("registered_address") if user_doc else None,
-                    coords=login_loc,
-                )
-            except Exception:
-                pass
             return FaceVerificationResponse(status=False, message=message, confidence=confidence)
 
         user = await auth_service.get_user_by_id(resolved_id)
@@ -274,18 +236,6 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         # Record login session for face-login users
         login_loc = request.location.model_dump() if request.location else None
         await auth_service._record_login(resolved_id, login_loc)
-
-        # Send login success email
-        try:
-            from app.utils.email_service import send_login_success_email
-            from app.utils.geocoding import reverse_geocode as _geocode
-            login_addr = await _geocode(login_loc["latitude"], login_loc["longitude"]) if login_loc else None
-            await send_login_success_email(
-                name=user.get("name", ""), email=user.get("email", ""),
-                address=login_addr, coords=login_loc,
-            )
-        except Exception:
-            pass
 
         return {
             "status": True,

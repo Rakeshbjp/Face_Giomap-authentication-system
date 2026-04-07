@@ -49,5 +49,3 @@ services:
         sync: false  # Must be set to your Vercel frontend URL
       - key: LOG_LEVEL
         value: "INFO"
-      - key: RESEND_API_KEY
-        sync: false  # Must be set manually in Render dashboard

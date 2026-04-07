@@ -184,67 +184,82 @@ const DashboardPage = () => {
                 <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                 {geoPos ? 'Resolving address...' : 'Getting GPS location...'}
               </div>
-            ) : liveAddress ? (
-              <div className="space-y-1">
-                <div className="flex items-start gap-2">
-                  <span className="text-blue-400 mt-0.5">📍</span>
-                  <div>
-                    {/* Road / Street */}
-                    {liveAddress.road && (
-                      <p className="text-gray-900 font-semibold text-sm">{liveAddress.road}</p>
-                    )}
-                    {/* Area (neighbourhood) */}
-                    {liveAddress.area && (
-                      <p className="text-gray-800 font-medium text-sm">
-                        {liveAddress.area}
-                        {liveAddress.suburb ? `, ${liveAddress.suburb}` : ''}
-                      </p>
-                    )}
-                    {/* City, District, State, Country */}
-                    <p className="text-gray-600 text-sm">
-                      {[
-                        liveAddress.city,
-                        liveAddress.district && liveAddress.district !== liveAddress.city ? liveAddress.district : null,
-                        liveAddress.state,
-                        liveAddress.country,
-                      ].filter(Boolean).join(', ')}
-                    </p>
-                    {/* Pincode */}
-                    {liveAddress.pincode && (
-                      <p className="text-gray-500 text-xs mt-0.5">
-                        Pincode: <span className="font-mono font-semibold">{liveAddress.pincode}</span>
-                      </p>
-                    )}
+            ) : liveAddress ? (() => {
+              // Build the best possible address display
+              const mainName = liveAddress.road || liveAddress.area || liveAddress.suburb || liveAddress.district || '';
+              const subArea = liveAddress.area && liveAddress.area !== mainName ? liveAddress.area : '';
+              const suburbText = liveAddress.suburb && liveAddress.suburb !== mainName && liveAddress.suburb !== subArea ? liveAddress.suburb : '';
+              const cityLine = [
+                liveAddress.city,
+                liveAddress.district && liveAddress.district !== liveAddress.city && liveAddress.district !== mainName ? liveAddress.district : null,
+                liveAddress.state,
+                liveAddress.country,
+              ].filter(Boolean).join(', ');
+
+              // If no structured fields at all, use display_name from Nominatim
+              const hasStructured = mainName || subArea || cityLine;
+              const fallbackName = liveAddress.display_name || '';
+
+              return (
+                <div className="space-y-1">
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-400 mt-0.5">📍</span>
+                    <div>
+                      {hasStructured ? (
+                        <>
+                          {mainName && (
+                            <p className="text-gray-900 font-semibold text-sm">{mainName}</p>
+                          )}
+                          {(subArea || suburbText) && (
+                            <p className="text-gray-800 font-medium text-sm">
+                              {[subArea, suburbText].filter(Boolean).join(', ')}
+                            </p>
+                          )}
+                          {cityLine && (
+                            <p className="text-gray-600 text-sm">{cityLine}</p>
+                          )}
+                        </>
+                      ) : fallbackName ? (
+                        <p className="text-gray-900 font-medium text-sm">{fallbackName}</p>
+                      ) : (
+                        <p className="text-gray-600 text-sm">Address not available</p>
+                      )}
+                      {liveAddress.pincode && (
+                        <p className="text-gray-500 text-xs mt-0.5">
+                          Pincode: <span className="font-mono font-semibold">{liveAddress.pincode}</span>
+                        </p>
+                      )}
+                    </div>
                   </div>
+                  <p className="text-xs text-blue-400 font-mono mt-1">
+                    {geoPos.latitude.toFixed(6)}, {geoPos.longitude.toFixed(6)}
+                  </p>
                 </div>
-                <p className="text-xs text-blue-400 font-mono mt-1">
-                  {geoPos.latitude.toFixed(6)}, {geoPos.longitude.toFixed(6)}
-                </p>
-              </div>
-            ) : (
+              );
+            })() : (
               <p className="text-gray-500 text-sm">Location not available</p>
             )}
           </div>
 
           {/* Login session address (from DB) */}
-          {latestSession?.address && (
-            <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
-              <p className="text-xs text-gray-500 uppercase tracking-wider mb-1 font-semibold">Login Location (recorded)</p>
-              <p className="text-gray-800 text-sm font-medium">
-                {[
-                  latestSession.address.road,
-                  latestSession.address.area,
-                  latestSession.address.suburb,
-                  latestSession.address.city,
-                  latestSession.address.district && latestSession.address.district !== latestSession.address.city
-                    ? latestSession.address.district : null,
-                  latestSession.address.state,
-                  latestSession.address.country,
-                ].filter(Boolean).join(', ')}
-                {latestSession.address.pincode && ` - ${latestSession.address.pincode}`}
-              </p>
-            </div>
-          )}
+          {latestSession?.address && (() => {
+            const addr = latestSession.address;
+            const parts = [
+              addr.road, addr.area, addr.suburb, addr.city,
+              addr.district && addr.district !== addr.city ? addr.district : null,
+              addr.state, addr.country,
+            ].filter(Boolean).join(', ');
+            const display = parts || addr.display_name || 'Location recorded';
+            return (
+              <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
+                <p className="text-xs text-gray-500 uppercase tracking-wider mb-1 font-semibold">Login Location (recorded)</p>
+                <p className="text-gray-800 text-sm font-medium">
+                  {display}
+                  {addr.pincode && ` - ${addr.pincode}`}
+                </p>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Face Data Setup Card — shown when no face data exists */}
