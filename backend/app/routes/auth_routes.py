@@ -174,14 +174,28 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
                     login_loc["latitude"], login_loc["longitude"],
                 )
                 if dist > LOCATION_RADIUS_M:
+                    from app.utils.geocoding import reverse_geocode
+                    reg_address = await reverse_geocode(reg_loc["latitude"], reg_loc["longitude"])
+                    cur_address = await reverse_geocode(login_loc["latitude"], login_loc["longitude"])
+
+                    reg_area = ", ".join(filter(None, [
+                        reg_address.get("road"), reg_address.get("area"),
+                        reg_address.get("city"), reg_address.get("state"),
+                    ])) or f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})"
+
+                    cur_area = ", ".join(filter(None, [
+                        cur_address.get("road"), cur_address.get("area"),
+                        cur_address.get("city"), cur_address.get("state"),
+                    ])) or f"({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f})"
+
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=(
                             f"LOGIN FAILED — Location mismatch! "
                             f"You are {dist:.0f}m away from your registered location. "
                             f"Max allowed: {LOCATION_RADIUS_M}m. "
-                            f"Registered: ({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}). "
-                            f"Current: ({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f}). "
+                            f"RegisteredArea: {reg_area}. "
+                            f"CurrentArea: {cur_area}. "
                             f"You can only login from your registered location. "
                             f"To login from this new location, you must register a new account first."
                         ),

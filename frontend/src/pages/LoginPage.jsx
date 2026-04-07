@@ -218,10 +218,12 @@ const LoginPage = () => {
                 {(() => {
                   const distMatch = locationError.match(/(\d+)m away/);
                   const maxMatch = locationError.match(/Max allowed: (\d+)m/);
-                  const regMatch = locationError.match(/Registered: \(([-\d.]+), ([-\d.]+)\)/);
-                  const curMatch = locationError.match(/Current: \(([-\d.]+), ([-\d.]+)\)/);
+                  const regAreaMatch = locationError.match(/RegisteredArea: (.+?)\./);
+                  const curAreaMatch = locationError.match(/CurrentArea: (.+?)\./);
                   const dist = distMatch ? distMatch[1] : null;
                   const maxDist = maxMatch ? maxMatch[1] : null;
+                  const regArea = regAreaMatch ? regAreaMatch[1] : null;
+                  const curArea = curAreaMatch ? curAreaMatch[1] : null;
 
                   return (
                     <div className="space-y-3 mb-4">
@@ -237,20 +239,18 @@ const LoginPage = () => {
                         </div>
                       )}
 
-                      {/* Location comparison */}
+                      {/* Location comparison — area names */}
                       <div className="grid grid-cols-2 gap-2">
-                        {regMatch && (
+                        {regArea && (
                           <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
                             <p className="text-xs font-semibold text-green-600 mb-1">📍 Registered Location</p>
-                            <p className="text-xs font-mono text-green-700">{parseFloat(regMatch[1]).toFixed(4)}</p>
-                            <p className="text-xs font-mono text-green-700">{parseFloat(regMatch[2]).toFixed(4)}</p>
+                            <p className="text-xs text-green-700 font-medium leading-relaxed">{regArea}</p>
                           </div>
                         )}
-                        {curMatch && (
+                        {curArea && (
                           <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
                             <p className="text-xs font-semibold text-red-600 mb-1">📍 Your Current Location</p>
-                            <p className="text-xs font-mono text-red-700">{parseFloat(curMatch[1]).toFixed(4)}</p>
-                            <p className="text-xs font-mono text-red-700">{parseFloat(curMatch[2]).toFixed(4)}</p>
+                            <p className="text-xs text-red-700 font-medium leading-relaxed">{curArea}</p>
                           </div>
                         )}
                       </div>
