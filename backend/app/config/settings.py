@@ -48,8 +48,9 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
-    # Email Notifications (Resend)
+    # Email (Resend)
     RESEND_API_KEY: str = ""
+    RESEND_FROM_EMAIL: str = "FaceAuth <onboarding@resend.dev>"
 
     class Config:
         env_file = ".env"
