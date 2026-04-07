@@ -19,7 +19,7 @@ const DashboardPage = () => {
   const hasFaceData = user?.has_face_data ?? user?.liveness_verified ?? false;
 
   // Live location for address display
-  const { position: geoPos } = useGeolocation({ watch: false });
+  const { position: geoPos } = useGeolocation({ watch: true });
   const [liveAddress, setLiveAddress] = useState(null);
   const [addressLoading, setAddressLoading] = useState(false);
 
