@@ -12,7 +12,8 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { loginWithPassword, verifyFace, faceLogin, getProfile } from '../services/authService';
+import { loginWithPassword, verifyFace, faceLogin, getProfile, geocodeLocation } from '../services/authService';
+import { reverseGeocodeClient } from '../utils/geocodeClient';
 import FaceVerification from '../components/face/FaceVerification';
 import Spinner from '../components/ui/Spinner';
 import useGeolocation from '../hooks/useGeolocation';
@@ -31,6 +32,36 @@ const LoginPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [locationError, setLocationError] = useState(null); // location mismatch error
+  const [regAddress, setRegAddress] = useState(null); // resolved registered location address
+  const [curAddress, setCurAddress] = useState(null); // resolved current location address
+
+  // When locationError is set, extract coordinates and reverse-geocode them
+  useEffect(() => {
+    if (!locationError) {
+      setRegAddress(null);
+      setCurAddress(null);
+      return;
+    }
+
+    const regMatch = locationError.match(/Registered:\s*\(([-\d.]+),\s*([-\d.]+)\)/);
+    const curMatch = locationError.match(/Current:\s*\(([-\d.]+),\s*([-\d.]+)\)/);
+
+    const resolveAddress = async (lat, lng) => {
+      try {
+        const res = await geocodeLocation(lat, lng);
+        if (res?.data && (res.data.area || res.data.road || res.data.display_name)) return res.data;
+      } catch { /* backend failed */ }
+      // Fallback to client-side
+      return await reverseGeocodeClient(lat, lng);
+    };
+
+    if (regMatch) {
+      resolveAddress(parseFloat(regMatch[1]), parseFloat(regMatch[2])).then(setRegAddress);
+    }
+    if (curMatch) {
+      resolveAddress(parseFloat(curMatch[1]), parseFloat(curMatch[2])).then(setCurAddress);
+    }
+  }, [locationError]);
 
   /**
    * Auto-advance to face verification if arriving from an external login (login.html).
@@ -218,12 +249,10 @@ const LoginPage = () => {
                 {(() => {
                   const distMatch = locationError.match(/(\d+)m away/);
                   const maxMatch = locationError.match(/Max allowed: (\d+)m/);
-                  const regAreaMatch = locationError.match(/RegisteredArea: (.+?)\./);
-                  const curAreaMatch = locationError.match(/CurrentArea: (.+?)\./);
+                  const regMatch = locationError.match(/Registered: \(([-\d.]+), ([-\d.]+)\)/);
+                  const curMatch = locationError.match(/Current: \(([-\d.]+), ([-\d.]+)\)/);
                   const dist = distMatch ? distMatch[1] : null;
                   const maxDist = maxMatch ? maxMatch[1] : null;
-                  const regArea = regAreaMatch ? regAreaMatch[1] : null;
-                  const curArea = curAreaMatch ? curAreaMatch[1] : null;
 
                   return (
                     <div className="space-y-3 mb-4">
@@ -239,20 +268,54 @@ const LoginPage = () => {
                         </div>
                       )}
 
-                      {/* Location comparison — area names */}
+
+                      {/* Location comparison — addresses instead of coordinates */}
                       <div className="grid grid-cols-2 gap-2">
-                        {regArea && (
-                          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-                            <p className="text-xs font-semibold text-green-600 mb-1">📍 Registered Location</p>
-                            <p className="text-xs text-green-700 font-medium leading-relaxed">{regArea}</p>
-                          </div>
-                        )}
-                        {curArea && (
-                          <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
-                            <p className="text-xs font-semibold text-red-600 mb-1">📍 Your Current Location</p>
-                            <p className="text-xs text-red-700 font-medium leading-relaxed">{curArea}</p>
-                          </div>
-                        )}
+                        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
+                          <p className="text-xs font-semibold text-green-600 mb-1">📍 Registered Location</p>
+                          {regAddress ? (
+                            <div className="text-left">
+                              {regAddress.road && <p className="text-xs font-medium text-green-800">{regAddress.road}</p>}
+                              <p className="text-xs text-green-700">
+                                {regAddress.area || regAddress.suburb || ''}
+                              </p>
+                              <p className="text-xs text-green-600">
+                                {[regAddress.city, regAddress.state].filter(Boolean).join(', ')}
+                              </p>
+                              {regAddress.pincode && (
+                                <p className="text-xs text-green-500">{regAddress.pincode}</p>
+                              )}
+                            </div>
+                          ) : regMatch ? (
+                            <div className="flex items-center justify-center gap-1 text-xs text-green-500">
+                              <div className="w-3 h-3 border border-green-400 border-t-transparent rounded-full animate-spin" />
+                              Resolving...
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-center">
+                          <p className="text-xs font-semibold text-red-600 mb-1">📍 Your Current Location</p>
+                          {curAddress ? (
+                            <div className="text-left">
+                              {curAddress.road && <p className="text-xs font-medium text-red-800">{curAddress.road}</p>}
+                              <p className="text-xs text-red-700">
+                                {curAddress.area || curAddress.suburb || ''}
+                              </p>
+                              <p className="text-xs text-red-600">
+                                {[curAddress.city, curAddress.state].filter(Boolean).join(', ')}
+                              </p>
+                              {curAddress.pincode && (
+                                <p className="text-xs text-red-500">{curAddress.pincode}</p>
+                              )}
+                            </div>
+                          ) : curMatch ? (
+                            <div className="flex items-center justify-center gap-1 text-xs text-red-500">
+                              <div className="w-3 h-3 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                              Resolving...
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   );

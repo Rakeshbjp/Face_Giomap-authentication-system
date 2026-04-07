@@ -15,8 +15,8 @@ const useGeolocation = ({ enableHighAccuracy = true, watch = true } = {}) => {
 
   const options = {
     enableHighAccuracy,
-    timeout: 30000,
-    maximumAge: watch ? 2000 : 10000,
+    timeout: 15000,
+    maximumAge: watch ? 5000 : 60000,
   };
 
   const handleSuccess = useCallback((pos) => {

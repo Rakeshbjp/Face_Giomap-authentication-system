@@ -10,6 +10,7 @@ import useGeolocation from '../hooks/useGeolocation';
 import LocationMap from '../components/map/LocationMap';
 import { useAuth } from '../context/AuthContext';
 import { geocodeLocation } from '../services/authService';
+import { reverseGeocodeClient } from '../utils/geocodeClient';
 
 /**
  * Haversine distance in metres.
@@ -43,15 +44,21 @@ const LocationPage = () => {
     const fetchAddress = async () => {
       setAddressLoading(true);
       try {
+        // Try backend first
         const result = await geocodeLocation(position.latitude, position.longitude);
-        if (!cancelled && result?.data) {
+        if (!cancelled && result?.data && (result.data.area || result.data.road || result.data.display_name)) {
           setCurrentAddress(result.data);
+          setAddressLoading(false);
+          return;
         }
-      } catch {
-        // fallback silently
-      } finally {
-        if (!cancelled) setAddressLoading(false);
-      }
+      } catch { /* backend failed */ }
+
+      // Fallback: client-side Nominatim
+      try {
+        const clientResult = await reverseGeocodeClient(position.latitude, position.longitude);
+        if (!cancelled) setCurrentAddress(clientResult);
+      } catch { /* both failed */ }
+      finally { if (!cancelled) setAddressLoading(false); }
     };
     fetchAddress();
     return () => { cancelled = true; };
