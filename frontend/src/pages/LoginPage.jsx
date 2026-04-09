@@ -21,7 +21,7 @@ import useGeolocation from '../hooks/useGeolocation';
 const LoginPage = () => {
   const navigate = useNavigate();
   const { isAuthenticated, loginSuccess, faceVerified } = useAuth();
-  const { position: geoPosition, loading: geoLoading, error: geoError, permissionDenied: geoDenied, refresh: geoRefresh } = useGeolocation({ watch: false });
+  const { position: geoPosition, loading: geoLoading, error: geoError, permissionDenied: geoDenied, refresh: geoRefresh } = useGeolocation({ watch: true });
 
   // State
   const [loginMode, setLoginMode] = useState('password'); // 'password' | 'face'
@@ -52,7 +52,11 @@ const LoginPage = () => {
         if (res?.data && (res.data.area || res.data.road || res.data.display_name)) return res.data;
       } catch { /* backend failed */ }
       // Fallback to client-side
-      return await reverseGeocodeClient(lat, lng);
+      try {
+        const res = await reverseGeocodeClient(lat, lng);
+        if (res && (res.area || res.road || res.display_name)) return res;
+      } catch { /* client failed */ }
+      return { fallback: `${lat.toFixed(6)}, ${lng.toFixed(6)}` };
     };
 
     if (regMatch) {
@@ -275,15 +279,32 @@ const LoginPage = () => {
                           <p className="text-xs font-semibold text-green-600 mb-1">📍 Registered Location</p>
                           {regAddress ? (
                             <div className="text-left">
-                              {regAddress.road && <p className="text-xs font-medium text-green-800">{regAddress.road}</p>}
-                              <p className="text-xs text-green-700">
-                                {regAddress.area || regAddress.suburb || ''}
-                              </p>
-                              <p className="text-xs text-green-600">
-                                {[regAddress.city, regAddress.state].filter(Boolean).join(', ')}
-                              </p>
-                              {regAddress.pincode && (
-                                <p className="text-xs text-green-500">{regAddress.pincode}</p>
+                              {regAddress.fallback ? (
+                                <p className="text-xs font-mono text-green-700">{regAddress.fallback}</p>
+                              ) : regAddress.road || regAddress.area || regAddress.suburb || regAddress.city || regAddress.state ? (
+                                <>
+                                  {regAddress.road && <p className="text-xs font-medium text-green-800">{regAddress.road}</p>}
+                                  {(regAddress.area || regAddress.suburb) && (
+                                    <p className="text-xs text-green-700">
+                                      {[regAddress.area, regAddress.suburb]
+                                        .filter(Boolean)
+                                        .reduce((acc, curr) => acc.includes(curr) ? acc : [...acc, curr], [])
+                                        .join(', ')}
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-green-600">
+                                    {[regAddress.city, regAddress.district && regAddress.district !== regAddress.city ? regAddress.district : null, regAddress.state].filter(Boolean).join(', ')}
+                                  </p>
+                                  {regAddress.pincode && (
+                                    <p className="text-xs text-green-500">Pincode: {regAddress.pincode}</p>
+                                  )}
+                                </>
+                              ) : regAddress.display_name ? (
+                                <p className="text-xs text-green-800 line-clamp-3" title={regAddress.display_name}>
+                                  {regAddress.display_name}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-green-700">Address not available</p>
                               )}
                             </div>
                           ) : regMatch ? (
@@ -298,15 +319,32 @@ const LoginPage = () => {
                           <p className="text-xs font-semibold text-red-600 mb-1">📍 Your Current Location</p>
                           {curAddress ? (
                             <div className="text-left">
-                              {curAddress.road && <p className="text-xs font-medium text-red-800">{curAddress.road}</p>}
-                              <p className="text-xs text-red-700">
-                                {curAddress.area || curAddress.suburb || ''}
-                              </p>
-                              <p className="text-xs text-red-600">
-                                {[curAddress.city, curAddress.state].filter(Boolean).join(', ')}
-                              </p>
-                              {curAddress.pincode && (
-                                <p className="text-xs text-red-500">{curAddress.pincode}</p>
+                              {curAddress.fallback ? (
+                                <p className="text-xs font-mono text-red-700">{curAddress.fallback}</p>
+                              ) : curAddress.road || curAddress.area || curAddress.suburb || curAddress.city || curAddress.state ? (
+                                <>
+                                  {curAddress.road && <p className="text-xs font-medium text-red-800">{curAddress.road}</p>}
+                                  {(curAddress.area || curAddress.suburb) && (
+                                    <p className="text-xs text-red-700">
+                                      {[curAddress.area, curAddress.suburb]
+                                        .filter(Boolean)
+                                        .reduce((acc, curr) => acc.includes(curr) ? acc : [...acc, curr], [])
+                                        .join(', ')}
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-red-600">
+                                    {[curAddress.city, curAddress.district && curAddress.district !== curAddress.city ? curAddress.district : null, curAddress.state].filter(Boolean).join(', ')}
+                                  </p>
+                                  {curAddress.pincode && (
+                                    <p className="text-xs text-red-500">Pincode: {curAddress.pincode}</p>
+                                  )}
+                                </>
+                              ) : curAddress.display_name ? (
+                                <p className="text-xs text-red-800 line-clamp-3" title={curAddress.display_name}>
+                                  {curAddress.display_name}
+                                </p>
+                              ) : (
+                                <p className="text-xs text-red-700">Address not available</p>
                               )}
                             </div>
                           ) : curMatch ? (

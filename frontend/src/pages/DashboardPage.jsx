@@ -20,37 +20,44 @@ const DashboardPage = () => {
   const hasFaceData = user?.has_face_data ?? user?.liveness_verified ?? false;
 
   // Live location for address display
-  const { position: geoPos } = useGeolocation({ watch: false });
+  const { position: geoPos } = useGeolocation({ watch: true });
   const [liveAddress, setLiveAddress] = useState(null);
   const [addressLoading, setAddressLoading] = useState(false);
 
   useEffect(() => {
     if (!geoPos) return;
     let cancelled = false;
-    const fetchAddr = async () => {
-      setAddressLoading(true);
-      try {
-        // Try backend geocode first
-        const res = await geocodeLocation(geoPos.latitude, geoPos.longitude);
-        if (!cancelled && res?.data && (res.data.area || res.data.road || res.data.display_name)) {
-          setLiveAddress(res.data);
-          setAddressLoading(false);
-          return;
-        }
-      } catch { /* backend failed — try client fallback */ }
+    
+    const timeoutId = setTimeout(() => {
+      const fetchAddr = async () => {
+        setAddressLoading(true);
+        try {
+          // Try backend geocode first
+          const res = await geocodeLocation(geoPos.latitude, geoPos.longitude);
+          if (!cancelled && res?.data && (res.data.area || res.data.road || res.data.display_name)) {
+            setLiveAddress(res.data);
+            setAddressLoading(false);
+            return;
+          }
+        } catch { /* backend failed — try client fallback */ }
 
-      // Fallback: call Nominatim directly from browser
-      try {
-        const clientResult = await reverseGeocodeClient(geoPos.latitude, geoPos.longitude);
-        if (!cancelled) setLiveAddress(clientResult);
-      } catch { /* both failed */ }
-      finally { if (!cancelled) setAddressLoading(false); }
+        // Fallback: call Nominatim directly from browser
+        try {
+          const clientResult = await reverseGeocodeClient(geoPos.latitude, geoPos.longitude);
+          if (!cancelled) setLiveAddress(clientResult);
+        } catch { /* both failed */ }
+        finally { if (!cancelled) setAddressLoading(false); }
+      };
+      fetchAddr();
+    }, 1500);
+
+    return () => { 
+      cancelled = true; 
+      clearTimeout(timeoutId);
     };
-    fetchAddr();
-    return () => { cancelled = true; };
   }, [
-    geoPos ? Math.round(geoPos.latitude * 1000) : null,
-    geoPos ? Math.round(geoPos.longitude * 1000) : null,
+    geoPos ? Math.round(geoPos.latitude * 100000) : null,
+    geoPos ? Math.round(geoPos.longitude * 100000) : null,
   ]);
 
   /**
@@ -139,6 +146,13 @@ const DashboardPage = () => {
                 {user?.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
               </p>
             </div>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Account Role</p>
+              <p className="text-gray-900 font-medium capitalize">
+                {user?.role || 'User'} 
+                {user?.role === 'admin' ? ' (Screen Sharing Allowed)' : ' (Screen Sharing Blocked)'}
+              </p>
+            </div>
           </div>
         </div>
 
@@ -201,37 +215,7 @@ const DashboardPage = () => {
                 <div className="flex items-start gap-2">
                   <span className="text-blue-400 mt-0.5">📍</span>
                   <div>
-                    {liveAddress.road || liveAddress.area ? (
-                      <>
-                        {/* Road / Street */}
-                        {liveAddress.road && (
-                          <p className="text-gray-900 font-semibold text-sm">{liveAddress.road}</p>
-                        )}
-                        {/* Area (neighbourhood) */}
-                        {liveAddress.area && (
-                          <p className="text-gray-800 font-medium text-sm">
-                            {liveAddress.area}
-                            {liveAddress.suburb ? `, ${liveAddress.suburb}` : ''}
-                          </p>
-                        )}
-                        {/* City, District, State, Country */}
-                        <p className="text-gray-600 text-sm">
-                          {[
-                            liveAddress.city,
-                            liveAddress.district && liveAddress.district !== liveAddress.city ? liveAddress.district : null,
-                            liveAddress.state,
-                            liveAddress.country,
-                          ].filter(Boolean).join(', ')}
-                        </p>
-                        {/* Pincode */}
-                        {liveAddress.pincode && (
-                          <p className="text-gray-500 text-xs mt-0.5">
-                            Pincode: <span className="font-mono font-semibold">{liveAddress.pincode}</span>
-                          </p>
-                        )}
-                      </>
-                    ) : liveAddress.display_name ? (
-                      /* Fallback: use full display_name from Nominatim */
+                    {liveAddress.display_name ? (
                       <p className="text-gray-800 text-sm font-medium">{liveAddress.display_name}</p>
                     ) : (
                       <p className="text-gray-500 text-sm">Address not available</p>
@@ -251,18 +235,8 @@ const DashboardPage = () => {
           {latestSession?.address && (
             <div className="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
               <p className="text-xs text-gray-500 uppercase tracking-wider mb-1 font-semibold">Login Location (recorded)</p>
-              <p className="text-gray-800 text-sm font-medium">
-                {[
-                  latestSession.address.road,
-                  latestSession.address.area,
-                  latestSession.address.suburb,
-                  latestSession.address.city,
-                  latestSession.address.district && latestSession.address.district !== latestSession.address.city
-                    ? latestSession.address.district : null,
-                  latestSession.address.state,
-                  latestSession.address.country,
-                ].filter(Boolean).join(', ')}
-                {latestSession.address.pincode && ` - ${latestSession.address.pincode}`}
+              <p className="text-gray-800 text-sm font-medium leading-snug">
+                {latestSession.address.display_name || "Address not available"}
               </p>
             </div>
           )}

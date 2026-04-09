@@ -94,6 +94,7 @@ class UserResponse(BaseModel):
     name: str
     email: str
     phone: str
+    role: str = "user"
     registered_location: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
@@ -145,6 +146,10 @@ class UserDocument(BaseModel):
     face_embeddings: List[List[float]] = Field(
         default_factory=list,
         description="Array of face embedding vectors (encrypted)"
+    )
+    role: str = Field(
+        default="user",
+        description="User role, either 'admin' or 'user'."
     )
     registered_location: Optional[dict] = Field(
         default=None,

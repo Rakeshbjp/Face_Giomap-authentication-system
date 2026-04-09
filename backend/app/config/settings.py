@@ -48,6 +48,13 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
+    # Clerk & Email Notifications
+    CLERK_WEBHOOK_SECRET: str = ""
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    ADMIN_EMAIL: str = ""
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

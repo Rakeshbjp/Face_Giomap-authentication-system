@@ -56,7 +56,11 @@ const GuestRoute = ({ children }) => {
   return children;
 };
 
+import useScreenProtection from './hooks/useScreenProtection';
+
 const AppRoutes = () => {
+  useScreenProtection();
+
   return (
     <>
       <Navbar />

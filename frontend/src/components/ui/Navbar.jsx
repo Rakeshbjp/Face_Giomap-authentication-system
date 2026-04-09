@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { Show, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 
 const Navbar = () => {
   const { isAuthenticated, isFaceVerified, user, logout } = useAuth();
@@ -37,6 +38,10 @@ const Navbar = () => {
 
           {/* Desktop navigation */}
           <div className="hidden sm:flex items-center gap-3 lg:gap-4">
+            <Show when="signed-in">
+              <UserButton />
+            </Show>
+
             {isAuthenticated && isFaceVerified ? (
               <>
                 <span className="text-sm text-gray-600 hidden md:block">
@@ -61,6 +66,16 @@ const Navbar = () => {
               </>
             ) : (
               <>
+                <Show when="signed-out">
+                  <div className="flex gap-2 mr-2">
+                    <div className="flex px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                      <SignInButton />
+                    </div>
+                    <div className="flex px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
+                      <SignUpButton />
+                    </div>
+                  </div>
+                </Show>
                 <Link to="/login" className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-blue-600 transition-colors">
                   Login
                 </Link>
@@ -94,6 +109,12 @@ const Navbar = () => {
       {mobileOpen && (
         <div className="sm:hidden bg-white border-t border-gray-100 shadow-lg animate-fadeIn">
           <div className="px-4 py-3 space-y-1">
+            <Show when="signed-in">
+              <div className="px-3 py-2 flex items-center justify-center border-b border-gray-100 mb-1 pb-4">
+                <UserButton />
+              </div>
+            </Show>
+
             {isAuthenticated && isFaceVerified ? (
               <>
                 <div className="px-3 py-2 text-sm text-gray-500 border-b border-gray-100 mb-1">
@@ -122,12 +143,20 @@ const Navbar = () => {
               </>
             ) : (
               <>
+                <Show when="signed-out">
+                  <div className="block px-3 py-2.5 text-sm font-medium text-center text-gray-700 bg-gray-50 border border-gray-200 rounded-lg mb-2 cursor-pointer hover:bg-gray-100 transition-colors">
+                    <SignInButton mode="modal" />
+                  </div>
+                  <div className="block px-3 py-2.5 text-sm font-medium text-center text-white bg-blue-600 rounded-lg mb-2 cursor-pointer hover:bg-blue-700 transition-colors">
+                    <SignUpButton mode="modal" />
+                  </div>
+                </Show>
                 <Link
                   to="/login"
                   onClick={closeMobile}
                   className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors"
                 >
-                  Login
+                  App Login
                 </Link>
                 <Link
                   to="/register"

@@ -20,6 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware  # pyre-ignore
 from app.config.settings import get_settings  # pyre-ignore
 from app.config.database import MongoDB  # pyre-ignore
 from app.routes.auth_routes import router as auth_router  # pyre-ignore
+from app.routes.webhook_routes import router as webhook_router  # pyre-ignore
 from app.middleware.auth_middleware import RateLimitMiddleware, SecurityHeadersMiddleware  # pyre-ignore
 from app.utils.logging_config import setup_logging  # pyre-ignore
 
@@ -98,6 +99,7 @@ app.add_middleware(
 # ──────────────────────────────────────────────
 
 app.include_router(auth_router)
+app.include_router(webhook_router)
 
 
 # ──────────────────────────────────────────────

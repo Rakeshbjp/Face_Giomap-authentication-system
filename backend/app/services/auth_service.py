@@ -210,6 +210,7 @@ class AuthService:
                 "name": name,
                 "email": email,
                 "phone": phone,
+                "role": "admin" if email == "admin@example.com" else "user",
                 "password_hash": password_hash,
                 "face_embeddings": encrypted_embeddings,
                 "registered_location": location,
@@ -256,6 +257,9 @@ class AuthService:
             if not user:
                 return False, "Invalid email or password", None
 
+            if not user:
+                return False, "Invalid email or password", None
+
             if not self.verify_password(password, user["password_hash"]):
                 return False, "Invalid email or password", None
 
@@ -268,13 +272,17 @@ class AuthService:
                 )
                 logger.info(f"Location distance: {dist:.0f}m (limit: {LOCATION_RADIUS_M}m)")
                 if dist > LOCATION_RADIUS_M:
+                    reg_addr = await reverse_geocode(reg_loc["latitude"], reg_loc["longitude"])
+                    curr_addr = await reverse_geocode(location["latitude"], location["longitude"])
+                    reg_display = reg_addr.get("display_name", f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})")
+                    curr_display = curr_addr.get("display_name", f"({location['latitude']:.6f}, {location['longitude']:.6f})")
                     return (
                         False,
                         f"LOGIN FAILED — Location mismatch! "
                         f"You are {dist:.0f}m away from your registered location. "
                         f"Max allowed: {LOCATION_RADIUS_M}m. "
-                        f"Registered: ({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}). "
-                        f"Current: ({location['latitude']:.6f}, {location['longitude']:.6f}). "
+                        f"Registered: {reg_display}. "
+                        f"Current: {curr_display}. "
                         f"You can only login from your registered location. "
                         f"To login from this new location, you must register a new account first.",
                         None,
