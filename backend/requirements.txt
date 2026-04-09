@@ -34,7 +34,4 @@ python-dotenv>=1.0.0
 httpx>=0.27.0
 
 # Production Server (Linux only — skip on Windows)
-gunicorn>=21.2.0; sys_platform != 'win32'
-
-# Clerk Webhook Verification
-svix>=1.15.0
+# gunicorn>=21.2.0

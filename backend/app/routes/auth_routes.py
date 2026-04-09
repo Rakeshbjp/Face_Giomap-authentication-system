@@ -24,16 +24,8 @@ from app.models.user import (
 )
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user, security
-from app.services.email_service import send_admin_email
-from app.utils.geocoding import reverse_geocode
 
 logger = logging.getLogger(__name__)
-
-async def _get_loc_str(location_data):
-    if not location_data:
-        return "Unknown Location"
-    geo = await reverse_geocode(location_data["latitude"], location_data["longitude"])
-    return geo.get("display_name", f"({location_data['latitude']}, {location_data['longitude']})")
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -54,26 +46,21 @@ async def register_user(request: UserRegisterRequest, db=Depends(get_database)):
     """
     auth_service = AuthService(db)
 
-    loc_data = request.location.model_dump() if request.location else None
-    loc_str = await _get_loc_str(loc_data)
-
     success, message, user_id = await auth_service.register_user(
         name=request.name,
         email=request.email,
         phone=request.phone,
         password=request.password,
         face_images=request.face_images,
-        location=loc_data,
+        location=request.location.model_dump() if request.location else None,
     )
 
     if not success:
-        send_admin_email("🚨 FaceAuth: Registration Failed", f"User failed to register.\nName: {request.name}\nEmail: {request.email}\nPhone: {request.phone}\nReason: {message}\nLocation: {loc_str}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=message,
         )
 
-    send_admin_email("✅ FaceAuth: Registration Successful", f"New user successfully registered!\nName: {request.name}\nEmail: {request.email}\nPhone: {request.phone}\nUser ID: {user_id}\nLocation: {loc_str}")
     logger.info(f"New user registered: {user_id}")
     return RegisterResponse(status=True, message=message, user_id=user_id)
 
@@ -92,23 +79,18 @@ async def login_user(request: UserLoginRequest, db=Depends(get_database)):
     """
     auth_service = AuthService(db)
 
-    loc_data = request.location.model_dump() if request.location else None
-    loc_str = await _get_loc_str(loc_data)
-
     success, message, token_data = await auth_service.login_with_password(
         email=request.email,
         password=request.password,
-        location=loc_data,
+        location=request.location.model_dump() if request.location else None,
     )
 
     if not success:
-        send_admin_email("🚨 FaceAuth: Password Login Failed", f"Password login attempt failed.\nEmail: {request.email}\nReason: {message}\nLocation: {loc_str}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=message,
         )
 
-    send_admin_email("✅ FaceAuth: Password Login Successful", f"User successfully completed password verification.\nEmail: {request.email}\nUser ID: {token_data['user_id']}\nLocation: {loc_str}")
     logger.info(f"User logged in (password verified): {token_data['user_id']}")
     return AuthTokenResponse(**token_data)
 
@@ -163,13 +145,9 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
     from app.services.auth_service import haversine_distance, LOCATION_RADIUS_M
     from bson import ObjectId
 
-    loc_data = request.location.model_dump() if request.location else None
-    loc_str = await _get_loc_str(loc_data)
-
     # Extract embedding from the provided face image (strict quality checks + full-face validation)
     live_embedding, reason = face_service.extract_embedding_with_reason(request.face_image, strict=True)
     if live_embedding is None:
-        send_admin_email("🚨 FaceAuth: Face Login Failed", f"Face image quality check failed.\nUser ID: {request.user_id}\nReason: {reason}\nLocation: {loc_str}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=reason,
@@ -201,7 +179,9 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
                     curr_addr = await reverse_geocode(login_loc["latitude"], login_loc["longitude"])
                     reg_display = reg_addr.get("display_name", f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})")
                     curr_display = curr_addr.get("display_name", f"({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f})")
-                    fail_msg = (
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail=(
                             f"LOGIN FAILED — Location mismatch! "
                             f"You are {dist:.0f}m away from your registered location. "
                             f"Max allowed: {LOCATION_RADIUS_M}m. "
@@ -209,11 +189,9 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
                             f"Current: {curr_display}. "
                             f"You can only login from your registered location. "
                             f"To login from this new location, you must register a new account first."
+                        ),
                     )
-                    send_admin_email("🚨 FaceAuth: Face Login Failed", f"Location mismatch error.\nUser ID: {resolved_id}\nReason: {fail_msg}\nLocation: {loc_str}")
-                    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=fail_msg)
             elif reg_loc and not login_loc:
-                send_admin_email("🚨 FaceAuth: Face Login Failed", f"Missing location error.\nUser ID: {resolved_id}\nLocation: Unknown Location")
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Location is required for login. Please enable GPS/location services.",
@@ -225,7 +203,6 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         )
 
         if not is_verified:
-            send_admin_email("🚨 FaceAuth: Face Login Failed", f"Face geometry did not match embeddings.\nUser ID: {resolved_id}\nConfidence: {confidence:.2f}\nReason: {message}\nLocation: {loc_str}")
             return FaceVerificationResponse(status=False, message=message, confidence=confidence)
 
         user = await auth_service.get_user_by_id(resolved_id)
@@ -238,8 +215,6 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         # Record login session for face-login users
         login_loc = request.location.model_dump() if request.location else None
         await auth_service._record_login(resolved_id, login_loc)
-        
-        send_admin_email("✅ FaceAuth: Face Login Successful", f"User successfully completed face verification.\nUser ID: {resolved_id}\nConfidence: {confidence:.2f}\nLocation: {loc_str}")
 
         return {
             "status": True,
