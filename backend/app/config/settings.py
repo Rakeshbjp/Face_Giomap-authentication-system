@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
 
     # Clerk & Email Notifications
+    CLERK_SECRET_KEY: str = ""
     CLERK_WEBHOOK_SECRET: str = ""
     SMTP_SERVER: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
