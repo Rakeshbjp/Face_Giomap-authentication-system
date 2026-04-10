@@ -24,6 +24,7 @@ from app.models.user import (
 )
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user, security
+from app.config.email import send_auth_email
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +180,10 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
                     curr_addr = await reverse_geocode(login_loc["latitude"], login_loc["longitude"])
                     reg_display = reg_addr.get("display_name", f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})")
                     curr_display = curr_addr.get("display_name", f"({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f})")
+                    
+                    if user_doc.get("email"):
+                        await send_auth_email(user_doc["email"], "login", "failure")
+                    
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=(
@@ -203,6 +208,8 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         )
 
         if not is_verified:
+            if user_doc and user_doc.get("email"):
+                await send_auth_email(user_doc["email"], "login", "failure")
             return FaceVerificationResponse(status=False, message=message, confidence=confidence)
 
         user = await auth_service.get_user_by_id(resolved_id)
@@ -215,6 +222,11 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         # Record login session for face-login users
         login_loc = request.location.model_dump() if request.location else None
         await auth_service._record_login(resolved_id, login_loc)
+        
+        from app.config.email import logger as email_logger
+        email_logger.error(f"DEBUG: Attempting to send FACE login SUCCESS email to {user['email']}")
+        await send_auth_email(user["email"], "login", "success")
+        email_logger.error(f"DEBUG: Email sending function completed!")
 
         return {
             "status": True,

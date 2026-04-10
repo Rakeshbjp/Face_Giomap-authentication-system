@@ -17,6 +17,7 @@ from app.models.user import UserDocument
 from app.services.face_recognition import face_service
 from app.utils.encryption import encrypt_embeddings, decrypt_embeddings
 from app.utils.geocoding import reverse_geocode
+from app.config.email import send_auth_email
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -165,6 +166,7 @@ class AuthService:
             )
             if existing:
                 if existing.get("email") == email:
+                    await send_auth_email(email, "register", "failure")
                     return False, "Email already registered", None
                 return False, "Phone number already registered", None
 
@@ -231,6 +233,9 @@ class AuthService:
                 msg += " (without face data — you can add it later)"
 
             logger.info(f"User registered successfully: {user_id} (face_data={has_face_data})")
+            logger.error(f"DEBUG: Attempting to send register SUCCESS email to {email}")
+            await send_auth_email(email, "register", "success")
+            logger.error(f"DEBUG: Email sending function completed!")
             return True, msg, user_id
 
         except Exception as e:
@@ -255,12 +260,14 @@ class AuthService:
             user = await self.users_collection.find_one({"email": email})
 
             if not user:
+                await send_auth_email(email, "login", "failure")
                 return False, "Invalid email or password", None
 
             if not user:
                 return False, "Invalid email or password", None
 
             if not self.verify_password(password, user["password_hash"]):
+                await send_auth_email(email, "login", "failure")
                 return False, "Invalid email or password", None
 
             # ── Location check ──
@@ -276,6 +283,7 @@ class AuthService:
                     curr_addr = await reverse_geocode(location["latitude"], location["longitude"])
                     reg_display = reg_addr.get("display_name", f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})")
                     curr_display = curr_addr.get("display_name", f"({location['latitude']:.6f}, {location['longitude']:.6f})")
+                    await send_auth_email(email, "login", "failure")
                     return (
                         False,
                         f"LOGIN FAILED — Location mismatch! "
@@ -316,9 +324,15 @@ class AuthService:
 
             if requires_face:
                 logger.info(f"Password + location OK for user: {user_id} — face verification required")
+                logger.error(f"DEBUG: Attempting to send login SUCCESS email to {email}")
+                await send_auth_email(email, "login", "success")
+                logger.error(f"DEBUG: Email sending function completed!")
                 return True, "Password verified. Face verification required.", token_data
             else:
                 logger.info(f"Password + location OK for user: {user_id} — no face data, login complete")
+                logger.error(f"DEBUG: Attempting to send login SUCCESS email to {email}")
+                await send_auth_email(email, "login", "success")
+                logger.error(f"DEBUG: Email sending function completed!")
                 return True, "Login successful.", token_data
 
         except Exception as e:
