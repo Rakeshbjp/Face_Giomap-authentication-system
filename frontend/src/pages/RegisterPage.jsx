@@ -5,13 +5,12 @@
  * Step 2: Face capture in 4 directions with liveness detection.
  * Step 3: Submit registration with face images.
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import FaceCaptureRegistration from '../components/face/FaceCaptureRegistration';
 import Spinner from '../components/ui/Spinner';
-import { registerUser, geocodeLocation } from '../services/authService';
-import { reverseGeocodeClient } from '../utils/geocodeClient';
+import { registerUser } from '../services/authService';
 import useGeolocation from '../hooks/useGeolocation';
 
 const RegisterPage = () => {
@@ -29,40 +28,6 @@ const RegisterPage = () => {
   const [errors, setErrors] = useState({});
   const [step, setStep] = useState(1); // 1 = form, 2 = face capture, 3 = submitting
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Address state for live location display
-  const [regAddress, setRegAddress] = useState(null);
-  const [addressLoading, setAddressLoading] = useState(false);
-
-  // Resolve address when GPS position becomes available
-  useEffect(() => {
-    if (!geoPosition) return;
-    let cancelled = false;
-    setAddressLoading(true);
-
-    const resolveAddress = async () => {
-      try {
-        const res = await geocodeLocation(geoPosition.latitude, geoPosition.longitude);
-        if (!cancelled && res?.data && (res.data.area || res.data.road || res.data.display_name)) {
-          setRegAddress(res.data);
-          setAddressLoading(false);
-          return;
-        }
-      } catch { /* backend failed */ }
-
-      try {
-        const clientResult = await reverseGeocodeClient(geoPosition.latitude, geoPosition.longitude);
-        if (!cancelled) setRegAddress(clientResult);
-      } catch { /* both failed */ }
-      finally { if (!cancelled) setAddressLoading(false); }
-    };
-
-    const timer = setTimeout(resolveAddress, 500);
-    return () => { cancelled = true; clearTimeout(timer); };
-  }, [
-    geoPosition ? Math.round(geoPosition.latitude * 100000) : null,
-    geoPosition ? Math.round(geoPosition.longitude * 100000) : null,
-  ]);
 
   /**
    * Handle form field changes.
@@ -350,73 +315,38 @@ const RegisterPage = () => {
               </div>
 
               {/* ── Registration Location Status ── */}
-              <div className={`rounded-xl border text-sm ${
+              <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm ${
                 geoPosition
                   ? 'bg-green-50 border-green-200 text-green-700'
                   : geoDenied
                   ? 'bg-red-50 border-red-200 text-red-600'
                   : 'bg-blue-50 border-blue-200 text-blue-600'
               }`}>
-                <div className="flex items-center gap-2 px-3 py-2.5">
-                  {geoPosition ? (
-                    <>
-                      <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
-                      <div className="flex-1">
-                        <span className="font-medium">📍 Registration location captured</span>
-                        <p className="text-xs text-green-500 mt-0.5">You will only be able to login from this area (100m radius)</p>
-                      </div>
-                      <span className="text-xs text-green-500 font-mono">
-                        {geoPosition.latitude.toFixed(4)}, {geoPosition.longitude.toFixed(4)}
-                      </span>
-                    </>
-                  ) : geoDenied ? (
-                    <>
-                      <div className="w-2.5 h-2.5 bg-red-500 rounded-full" />
-                      <div className="flex-1">
-                        <span className="font-medium">⚠️ Location denied</span>
-                        <p className="text-xs text-red-500 mt-0.5">Click 🔒 in address bar → Allow location for login security</p>
-                      </div>
-                      <button onClick={geoRefresh} className="text-xs bg-red-100 hover:bg-red-200 px-2 py-1 rounded font-medium transition-colors">Retry</button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="font-medium">Detecting your location...</span>
-                    </>
-                  )}
-                </div>
-
-                {/* Detailed address display */}
-                {geoPosition && (
-                  <div className="px-3 pb-3 pt-1 border-t border-green-200">
-                    {addressLoading ? (
-                      <div className="flex items-center gap-2 text-xs text-green-500 py-1">
-                        <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
-                        Resolving address...
-                      </div>
-                    ) : regAddress && (regAddress.road || regAddress.area || regAddress.city) ? (
-                      <div className="space-y-0.5 py-1">
-                        {regAddress.road && (
-                          <p className="text-sm font-medium text-green-800">📍 {regAddress.road}</p>
-                        )}
-                        {(regAddress.area || regAddress.suburb) && (
-                          <p className="text-xs text-green-700">
-                            {[regAddress.area, regAddress.suburb && regAddress.suburb !== regAddress.area ? regAddress.suburb : null].filter(Boolean).join(', ')}
-                          </p>
-                        )}
-                        <p className="text-xs text-green-600">
-                          {[regAddress.city, regAddress.state, regAddress.country].filter(Boolean).join(', ')}
-                        </p>
-                        {regAddress.pincode && (
-                          <p className="text-xs text-green-500">PIN: {regAddress.pincode}</p>
-                        )}
-                      </div>
-                    ) : regAddress?.display_name ? (
-                      <p className="text-xs text-green-700 py-1">{regAddress.display_name}</p>
-                    ) : (
-                      <p className="text-xs text-green-500 py-1">Address resolution unavailable</p>
-                    )}
-                  </div>
+                {geoPosition ? (
+                  <>
+                    <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
+                    <div className="flex-1">
+                      <span className="font-medium">📍 Registration location captured</span>
+                      <p className="text-xs text-green-500 mt-0.5">You will only be able to login from this area (100m radius)</p>
+                    </div>
+                    <span className="text-xs text-green-500 font-mono">
+                      {geoPosition.latitude.toFixed(4)}, {geoPosition.longitude.toFixed(4)}
+                    </span>
+                  </>
+                ) : geoDenied ? (
+                  <>
+                    <div className="w-2.5 h-2.5 bg-red-500 rounded-full" />
+                    <div className="flex-1">
+                      <span className="font-medium">⚠️ Location denied</span>
+                      <p className="text-xs text-red-500 mt-0.5">Click 🔒 in address bar → Allow location for login security</p>
+                    </div>
+                    <button onClick={geoRefresh} className="text-xs bg-red-100 hover:bg-red-200 px-2 py-1 rounded font-medium transition-colors">Retry</button>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="font-medium">Detecting your location...</span>
+                  </>
                 )}
               </div>
 

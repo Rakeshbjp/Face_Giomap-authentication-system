@@ -7,7 +7,7 @@ Handles user registration, login, face verification, and profile access.
 import logging
 from datetime import datetime
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from bson import ObjectId
@@ -24,7 +24,7 @@ from app.models.user import (
 )
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user, security
-from app.config.email import send_auth_email, fire_and_forget_email
+from app.config.email import send_auth_email
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ async def register_user(request: UserRegisterRequest, db=Depends(get_database)):
     - 4 face images (front, left, right, up/down) as base64 strings
     - Liveness detection is performed automatically
     """
-    auth_service = AuthService(db)
+    auth_service = AuthService(db, background_tasks)
 
     success, message, user_id = await auth_service.register_user(
         name=request.name,
@@ -71,14 +71,18 @@ async def register_user(request: UserRegisterRequest, db=Depends(get_database)):
 # ──────────────────────────────────────────────
 
 @router.post("/login", response_model=AuthTokenResponse)
-async def login_user(request: UserLoginRequest, db=Depends(get_database)):
+async def login_user(
+    request: UserLoginRequest,
+    background_tasks: BackgroundTasks,
+    db=Depends(get_database)
+):
     """
     Login with email and password.
 
     Returns JWT tokens but face verification is still required.
     Client must call /api/auth/verify-face next.
     """
-    auth_service = AuthService(db)
+    auth_service = AuthService(db, background_tasks)
 
     success, message, token_data = await auth_service.login_with_password(
         email=request.email,
@@ -103,6 +107,7 @@ async def login_user(request: UserLoginRequest, db=Depends(get_database)):
 @router.post("/verify-face", response_model=FaceVerificationResponse)
 async def verify_face(
     request: FaceVerifyRequest,
+    background_tasks: BackgroundTasks,
     db=Depends(get_database),
 ):
     """
@@ -111,7 +116,7 @@ async def verify_face(
     Called after password login or as standalone face login.
     Captures a live face image and compares it with stored embeddings.
     """
-    auth_service = AuthService(db)
+    auth_service = AuthService(db, background_tasks)
 
     is_verified, message, confidence = await auth_service.verify_face(
         user_id=request.user_id,
@@ -125,7 +130,7 @@ async def verify_face(
         if resolved_id:
             user_doc = await db.users.find_one({"_id": ObjectId(resolved_id)}, {"email": 1})
             if user_doc and user_doc.get("email"):
-                fire_and_forget_email(user_doc["email"], "login", "success")
+                background_tasks.add_task(send_auth_email, user_doc["email"], "login", "success")
     else:
         logger.warning(f"Face verification failed for user: {request.user_id}")
 
@@ -162,7 +167,7 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
 
     # If user_id is provided, verify against that specific user
     if request.user_id:
-        auth_service = AuthService(db)
+        auth_service = AuthService(db, background_tasks)
 
         # Resolve the identifier (could be email or ObjectId)
         resolved_id = await auth_service.resolve_user_id(request.user_id)
@@ -206,7 +211,8 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
                     curr_display = f"({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
                     
                     if user_doc.get("email"):
-                        await send_auth_email(
+                        background_tasks.add_task(
+                            send_auth_email,
                             user_doc["email"], "login", "location_mismatch",
                             reg_display=email_reg_str,
                             curr_display=email_curr_str
@@ -237,7 +243,7 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
 
         if not is_verified:
             if user_doc and user_doc.get("email"):
-                fire_and_forget_email(user_doc["email"], "login", "failure")
+                background_tasks.add_task(send_auth_email, user_doc["email"], "login", "failure")
             return FaceVerificationResponse(status=False, message=message, confidence=confidence)
 
         user = await auth_service.get_user_by_id(resolved_id)
@@ -251,7 +257,7 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         login_loc = request.location.model_dump() if request.location else None
         await auth_service._record_login(resolved_id, login_loc)
         
-        fire_and_forget_email(user["email"], "login", "success")
+        background_tasks.add_task(send_auth_email, user["email"], "login", "success")
 
         return {
             "status": True,
@@ -390,6 +396,7 @@ async def health_check():
 
 @router.post("/logout", response_model=StandardResponse)
 async def logout_user(
+    background_tasks: BackgroundTasks,
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db=Depends(get_database),
 ):
@@ -397,7 +404,7 @@ async def logout_user(
     payload = await get_current_user(credentials)
     user_id = payload.get("sub")
 
-    auth_service = AuthService(db)
+    auth_service = AuthService(db, background_tasks)
     await auth_service.record_logout(user_id)
 
     logger.info(f"User logged out: {user_id}")
