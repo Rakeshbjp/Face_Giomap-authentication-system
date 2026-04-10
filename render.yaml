@@ -49,3 +49,13 @@ services:
         sync: false  # Must be set to your Vercel frontend URL
       - key: LOG_LEVEL
         value: "INFO"
+      - key: MAIL_USERNAME
+        value: "srakeshkumarrk2468@gmail.com"
+      - key: MAIL_PASSWORD
+        value: "tyhk wqna ctgi wqxw"
+      - key: MAIL_FROM
+        value: "srakeshkumarrk2468@gmail.com"
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_SERVER
+        value: "smtp.gmail.com"
