@@ -17,7 +17,7 @@ from app.models.user import UserDocument
 from app.services.face_recognition import face_service
 from app.utils.encryption import encrypt_embeddings, decrypt_embeddings
 from app.utils.geocoding import reverse_geocode
-from app.config.email import send_auth_email
+from app.config.email import send_auth_email, format_address_for_email
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -166,7 +166,10 @@ class AuthService:
             )
             if existing:
                 if existing.get("email") == email:
-                    await send_auth_email(email, "register", "failure")
+                    await send_auth_email(
+                        email, "register", "failure",
+                        user_name=name, user_email=email, user_phone=phone,
+                    )
                     return False, "Email already registered", None
                 return False, "Phone number already registered", None
 
@@ -233,9 +236,15 @@ class AuthService:
                 msg += " (without face data — you can add it later)"
 
             logger.info(f"User registered successfully: {user_id} (face_data={has_face_data})")
-            logger.error(f"DEBUG: Attempting to send register SUCCESS email to {email}")
-            await send_auth_email(email, "register", "success")
-            logger.error(f"DEBUG: Email sending function completed!")
+            await send_auth_email(
+                email, "register", "success",
+                user_name=name, user_email=email, user_phone=phone,
+                address_display=format_address_for_email(
+                    registered_address,
+                    location.get("latitude") if location else None,
+                    location.get("longitude") if location else None,
+                ),
+            )
             return True, msg, user_id
 
         except Exception as e:
@@ -260,14 +269,22 @@ class AuthService:
             user = await self.users_collection.find_one({"email": email})
 
             if not user:
-                await send_auth_email(email, "login", "failure")
-                return False, "Invalid email or password", None
-
-            if not user:
+                await send_auth_email(email, "login", "failure", user_email=email)
                 return False, "Invalid email or password", None
 
             if not self.verify_password(password, user["password_hash"]):
-                await send_auth_email(email, "login", "failure")
+                _login_addr = None
+                if location:
+                    _login_addr = await reverse_geocode(location["latitude"], location["longitude"])
+                await send_auth_email(
+                    email, "login", "failure",
+                    user_name=user.get("name", "N/A"), user_email=email, user_phone=user.get("phone", "N/A"),
+                    address_display=format_address_for_email(
+                        _login_addr,
+                        location.get("latitude") if location else None,
+                        location.get("longitude") if location else None,
+                    ),
+                )
                 return False, "Invalid email or password", None
 
             # ── Location check ──
@@ -303,8 +320,9 @@ class AuthService:
                     curr_display = f"({location['latitude']:.6f}, {location['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
                     await send_auth_email(
                         email, "login", "location_mismatch",
+                        user_name=user.get("name", "N/A"), user_email=email, user_phone=user.get("phone", "N/A"),
                         reg_display=email_reg_str,
-                        curr_display=email_curr_str
+                        curr_display=email_curr_str,
                     )
                     return (
                         False,
@@ -346,15 +364,20 @@ class AuthService:
 
             if requires_face:
                 logger.info(f"Password + location OK for user: {user_id} — face verification required")
-                logger.error(f"DEBUG: Attempting to send login SUCCESS email to {email}")
-                await send_auth_email(email, "login", "success")
-                logger.error(f"DEBUG: Email sending function completed!")
+                # Don't send login success email yet — face verification still pending
                 return True, "Password verified. Face verification required.", token_data
             else:
                 logger.info(f"Password + location OK for user: {user_id} — no face data, login complete")
-                logger.error(f"DEBUG: Attempting to send login SUCCESS email to {email}")
-                await send_auth_email(email, "login", "success")
-                logger.error(f"DEBUG: Email sending function completed!")
+                _login_addr = await reverse_geocode(location["latitude"], location["longitude"]) if location else None
+                await send_auth_email(
+                    email, "login", "success",
+                    user_name=user.get("name", "N/A"), user_email=email, user_phone=user.get("phone", "N/A"),
+                    address_display=format_address_for_email(
+                        _login_addr,
+                        location.get("latitude") if location else None,
+                        location.get("longitude") if location else None,
+                    ),
+                )
                 return True, "Login successful.", token_data
 
         except Exception as e:
@@ -433,8 +456,8 @@ class AuthService:
             if user:
                 user["_id"] = str(user["_id"])
                 # Add a flag telling the frontend whether face data exists
-                face_emb = user.pop("face_embedding", None)
-                user["has_face_data"] = bool(face_emb)
+                # face_embeddings is excluded by projection, so use liveness_verified flag
+                user["has_face_data"] = user.get("liveness_verified", False)
 
                 # Ensure session tracking fields exist (for users registered before this feature)
                 user.setdefault("last_login_at", None)
@@ -513,6 +536,7 @@ class AuthService:
 
     async def record_logout(self, user_id: str):
         """Record logout time for the user's most recent session."""
+        # Step 1: Record logout in the database
         try:
             now = datetime.utcnow()
             # Update the last session's logout_at
@@ -538,11 +562,23 @@ class AuthService:
                     {"$set": {"last_logout_at": now}},
                 )
             logger.info(f"Logout recorded for user: {user_id}")
-            
-            # Send logout notification email
-            user_doc = await self.users_collection.find_one({"_id": ObjectId(user_id)})
-            if user_doc and user_doc.get("email"):
-                await send_auth_email(user_doc["email"], "login", "logout")
-                
         except Exception as e:
-            logger.warning(f"Failed to record logout: {e}")
+            logger.warning(f"Failed to record logout session: {e}")
+
+        # Step 2: Send logout notification email (always attempted, even if step 1 fails)
+        try:
+            user_doc = await self.users_collection.find_one(
+                {"_id": ObjectId(user_id)}, {"email": 1, "name": 1, "phone": 1}
+            )
+            if user_doc and user_doc.get("email"):
+                logger.info(f"Sending logout email to {user_doc['email']}")
+                await send_auth_email(
+                    user_doc["email"], "login", "logout",
+                    user_name=user_doc.get("name", "N/A"),
+                    user_email=user_doc["email"],
+                    user_phone=user_doc.get("phone", "N/A"),
+                )
+            else:
+                logger.warning(f"Cannot send logout email — user {user_id} not found or has no email")
+        except Exception as e:
+            logger.error(f"Failed to send logout email for user {user_id}: {e}")

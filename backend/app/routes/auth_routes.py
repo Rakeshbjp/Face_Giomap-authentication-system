@@ -24,7 +24,7 @@ from app.models.user import (
 )
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user, security
-from app.config.email import send_auth_email
+from app.config.email import send_auth_email, format_address_for_email
 
 logger = logging.getLogger(__name__)
 
@@ -202,8 +202,11 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
                     if user_doc.get("email"):
                         await send_auth_email(
                             user_doc["email"], "login", "location_mismatch",
+                            user_name=user_doc.get("name", "N/A"),
+                            user_email=user_doc["email"],
+                            user_phone=user_doc.get("phone", "N/A"),
                             reg_display=email_reg_str,
-                            curr_display=email_curr_str
+                            curr_display=email_curr_str,
                         )
                     
                     raise HTTPException(
@@ -231,7 +234,21 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
 
         if not is_verified:
             if user_doc and user_doc.get("email"):
-                await send_auth_email(user_doc["email"], "login", "failure")
+                from app.utils.geocoding import reverse_geocode as _rg
+                _fl_addr = None
+                if login_loc:
+                    _fl_addr = await _rg(login_loc["latitude"], login_loc["longitude"])
+                await send_auth_email(
+                    user_doc["email"], "login", "failure",
+                    user_name=user_doc.get("name", "N/A"),
+                    user_email=user_doc["email"],
+                    user_phone=user_doc.get("phone", "N/A"),
+                    address_display=format_address_for_email(
+                        _fl_addr,
+                        login_loc.get("latitude") if login_loc else None,
+                        login_loc.get("longitude") if login_loc else None,
+                    ),
+                )
             return FaceVerificationResponse(status=False, message=message, confidence=confidence)
 
         user = await auth_service.get_user_by_id(resolved_id)
@@ -245,10 +262,21 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         login_loc = request.location.model_dump() if request.location else None
         await auth_service._record_login(resolved_id, login_loc)
         
-        from app.config.email import logger as email_logger
-        email_logger.error(f"DEBUG: Attempting to send FACE login SUCCESS email to {user['email']}")
-        await send_auth_email(user["email"], "login", "success")
-        email_logger.error(f"DEBUG: Email sending function completed!")
+        from app.utils.geocoding import reverse_geocode as _rg2
+        _fl_addr2 = None
+        if login_loc:
+            _fl_addr2 = await _rg2(login_loc["latitude"], login_loc["longitude"])
+        await send_auth_email(
+            user["email"], "login", "success",
+            user_name=user.get("name", "N/A"),
+            user_email=user["email"],
+            user_phone=user.get("phone", "N/A"),
+            address_display=format_address_for_email(
+                _fl_addr2,
+                login_loc.get("latitude") if login_loc else None,
+                login_loc.get("longitude") if login_loc else None,
+            ),
+        )
 
         return {
             "status": True,
@@ -354,7 +382,7 @@ async def update_face_data(
         {"_id": ObjectId(user_id)},
         {
             "$set": {
-                "face_embedding": encrypted_embeddings,
+                "face_embeddings": encrypted_embeddings,
                 "liveness_verified": True,
                 "updated_at": datetime.utcnow(),
             }

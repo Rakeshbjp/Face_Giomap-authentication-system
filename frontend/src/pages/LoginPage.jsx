@@ -35,6 +35,40 @@ const LoginPage = () => {
   const [regAddress, setRegAddress] = useState(null); // resolved registered location address
   const [curAddress, setCurAddress] = useState(null); // resolved current location address
 
+  // Live address for the current login location
+  const [loginAddress, setLoginAddress] = useState(null);
+  const [loginAddrLoading, setLoginAddrLoading] = useState(false);
+
+  // Resolve login address when GPS position changes
+  useEffect(() => {
+    if (!geoPosition) return;
+    let cancelled = false;
+    setLoginAddrLoading(true);
+
+    const resolveAddress = async () => {
+      try {
+        const res = await geocodeLocation(geoPosition.latitude, geoPosition.longitude);
+        if (!cancelled && res?.data && (res.data.area || res.data.road || res.data.display_name)) {
+          setLoginAddress(res.data);
+          setLoginAddrLoading(false);
+          return;
+        }
+      } catch { /* backend failed */ }
+
+      try {
+        const clientResult = await reverseGeocodeClient(geoPosition.latitude, geoPosition.longitude);
+        if (!cancelled) setLoginAddress(clientResult);
+      } catch { /* both failed */ }
+      finally { if (!cancelled) setLoginAddrLoading(false); }
+    };
+
+    const timer = setTimeout(resolveAddress, 500);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [
+    geoPosition ? Math.round(geoPosition.latitude * 100000) : null,
+    geoPosition ? Math.round(geoPosition.longitude * 100000) : null,
+  ]);
+
   // When locationError is set, extract coordinates and reverse-geocode them
   useEffect(() => {
     if (!locationError) {
@@ -452,35 +486,70 @@ const LoginPage = () => {
                   </div>
 
                   {/* ── Live Location Status ── */}
-                  <div className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm ${
+                  <div className={`rounded-xl border text-sm ${
                     geoPosition
                       ? 'bg-green-50 border-green-200 text-green-700'
                       : geoDenied
                       ? 'bg-red-50 border-red-200 text-red-600'
                       : 'bg-blue-50 border-blue-200 text-blue-600'
                   }`}>
-                    {geoPosition ? (
-                      <>
-                        <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
-                        <span className="font-medium">📍 Location detected</span>
-                        <span className="text-xs text-green-500 ml-auto font-mono">
-                          {geoPosition.latitude.toFixed(4)}, {geoPosition.longitude.toFixed(4)}
-                        </span>
-                      </>
-                    ) : geoDenied ? (
-                      <>
-                        <div className="w-2.5 h-2.5 bg-red-500 rounded-full" />
-                        <div className="flex-1">
-                          <span className="font-medium">⚠️ Location denied</span>
-                          <p className="text-xs text-red-500 mt-0.5">Click 🔒 in address bar → Location → Allow, then:</p>
-                        </div>
-                        <button onClick={geoRefresh} className="text-xs bg-red-100 hover:bg-red-200 px-2 py-1 rounded font-medium transition-colors">Retry</button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="font-medium">Detecting location...</span>
-                      </>
+                    <div className="flex items-center gap-2 px-3 py-2.5">
+                      {geoPosition ? (
+                        <>
+                          <div className="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse" />
+                          <span className="font-medium">📍 Location detected</span>
+                          <span className="text-xs text-green-500 ml-auto font-mono">
+                            {geoPosition.latitude.toFixed(4)}, {geoPosition.longitude.toFixed(4)}
+                          </span>
+                        </>
+                      ) : geoDenied ? (
+                        <>
+                          <div className="w-2.5 h-2.5 bg-red-500 rounded-full" />
+                          <div className="flex-1">
+                            <span className="font-medium">⚠️ Location denied</span>
+                            <p className="text-xs text-red-500 mt-0.5">Click 🔒 in address bar → Location → Allow, then:</p>
+                          </div>
+                          <button onClick={geoRefresh} className="text-xs bg-red-100 hover:bg-red-200 px-2 py-1 rounded font-medium transition-colors">Retry</button>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-2.5 h-2.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                          <span className="font-medium">Detecting location...</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Detailed address display */}
+                    {geoPosition && (
+                      <div className="px-3 pb-3 pt-1 border-t border-green-200">
+                        {loginAddrLoading ? (
+                          <div className="flex items-center gap-2 text-xs text-green-500 py-1">
+                            <div className="w-3 h-3 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+                            Resolving address...
+                          </div>
+                        ) : loginAddress && (loginAddress.road || loginAddress.area || loginAddress.city) ? (
+                          <div className="space-y-0.5 py-1">
+                            {loginAddress.road && (
+                              <p className="text-sm font-medium text-green-800">📍 {loginAddress.road}</p>
+                            )}
+                            {(loginAddress.area || loginAddress.suburb) && (
+                              <p className="text-xs text-green-700">
+                                {[loginAddress.area, loginAddress.suburb && loginAddress.suburb !== loginAddress.area ? loginAddress.suburb : null].filter(Boolean).join(', ')}
+                              </p>
+                            )}
+                            <p className="text-xs text-green-600">
+                              {[loginAddress.city, loginAddress.state, loginAddress.country].filter(Boolean).join(', ')}
+                            </p>
+                            {loginAddress.pincode && (
+                              <p className="text-xs text-green-500">PIN: {loginAddress.pincode}</p>
+                            )}
+                          </div>
+                        ) : loginAddress?.display_name ? (
+                          <p className="text-xs text-green-700 py-1">{loginAddress.display_name}</p>
+                        ) : (
+                          <p className="text-xs text-green-500 py-1">Address resolution unavailable</p>
+                        )}
+                      </div>
                     )}
                   </div>
 
