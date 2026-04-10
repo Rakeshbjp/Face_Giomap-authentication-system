@@ -178,8 +178,8 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
                     from app.utils.geocoding import reverse_geocode
                     reg_addr = await reverse_geocode(reg_loc["latitude"], reg_loc["longitude"])
                     curr_addr = await reverse_geocode(login_loc["latitude"], login_loc["longitude"])
-                    reg_display = reg_addr.get("display_name", f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})")
-                    curr_display = curr_addr.get("display_name", f"({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f})")
+                    reg_display = f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {reg_addr.get('display_name', 'Location')}"
+                    curr_display = f"({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
                     
                     if user_doc.get("email"):
                         await send_auth_email(user_doc["email"], "login", "failure")

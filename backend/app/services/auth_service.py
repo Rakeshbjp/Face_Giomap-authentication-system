@@ -281,8 +281,8 @@ class AuthService:
                 if dist > LOCATION_RADIUS_M:
                     reg_addr = await reverse_geocode(reg_loc["latitude"], reg_loc["longitude"])
                     curr_addr = await reverse_geocode(location["latitude"], location["longitude"])
-                    reg_display = reg_addr.get("display_name", f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f})")
-                    curr_display = curr_addr.get("display_name", f"({location['latitude']:.6f}, {location['longitude']:.6f})")
+                    reg_display = f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {reg_addr.get('display_name', 'Location')}"
+                    curr_display = f"({location['latitude']:.6f}, {location['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
                     await send_auth_email(email, "login", "failure")
                     return (
                         False,
