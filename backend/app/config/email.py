@@ -109,6 +109,41 @@ _TEMPLATES = {
         </div>
         """,
     ),
+    ("login", "location_mismatch"): (
+        "📍 Location Mismatch Detected — Face Auth",
+        """
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: auto;
+                    padding: 32px; border-radius: 12px; background: #fffbeb; border: 1px solid #fde68a;">
+            <h2 style="color: #b45309; margin-top: 0;">📍 Location Mismatch</h2>
+            <p style="color: #92400e; font-size: 15px; line-height: 1.6;">
+                A login attempt was dynamically blocked due to a location mismatch on your <b>Face Auth</b> account.<br><br>
+                <strong>Location mismatch detected!</strong> You can only login from your currently registered location.
+                To log in from this new location, you must register a new account on this device first.
+            </p>
+            <hr style="border: none; border-top: 1px solid #fde68a; margin: 20px 0;">
+            <p style="color: #6b7280; font-size: 12px;">
+                This is an automated security alert.
+            </p>
+        </div>
+        """,
+    ),
+    ("login", "logout"): (
+        "👋 Logged Out Successfully — Face Auth",
+        """
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 520px; margin: auto;
+                    padding: 32px; border-radius: 12px; background: #f3f4f6; border: 1px solid #d1d5db;">
+            <h2 style="color: #374151; margin-top: 0;">👋 Secure Session Ended</h2>
+            <p style="color: #4b5563; font-size: 15px; line-height: 1.6;">
+                You have successfully securely logged out of your <b>Face Auth</b> account.<br>
+                Your session has been terminated successfully.
+            </p>
+            <hr style="border: none; border-top: 1px solid #d1d5db; margin: 20px 0;">
+            <p style="color: #6b7280; font-size: 12px;">
+                This is an automated notification.
+            </p>
+        </div>
+        """,
+    ),
 }
 
 

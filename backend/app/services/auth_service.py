@@ -283,7 +283,7 @@ class AuthService:
                     curr_addr = await reverse_geocode(location["latitude"], location["longitude"])
                     reg_display = f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {reg_addr.get('display_name', 'Location')}"
                     curr_display = f"({location['latitude']:.6f}, {location['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
-                    await send_auth_email(email, "login", "failure")
+                    await send_auth_email(email, "login", "location_mismatch")
                     return (
                         False,
                         f"LOGIN FAILED — Location mismatch! "
@@ -516,5 +516,11 @@ class AuthService:
                     {"$set": {"last_logout_at": now}},
                 )
             logger.info(f"Logout recorded for user: {user_id}")
+            
+            # Send logout notification email
+            user_doc = await self.users_collection.find_one({"_id": ObjectId(user_id)})
+            if user_doc and user_doc.get("email"):
+                await send_auth_email(user_doc["email"], "login", "logout")
+                
         except Exception as e:
             logger.warning(f"Failed to record logout: {e}")

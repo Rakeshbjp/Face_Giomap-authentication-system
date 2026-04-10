@@ -182,7 +182,7 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
                     curr_display = f"({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
                     
                     if user_doc.get("email"):
-                        await send_auth_email(user_doc["email"], "login", "failure")
+                        await send_auth_email(user_doc["email"], "login", "location_mismatch")
                     
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
