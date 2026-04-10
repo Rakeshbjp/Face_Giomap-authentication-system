@@ -9,6 +9,7 @@ Sends styled email alerts on:
 Uses Gmail SMTP with App Passwords.
 """
 
+import asyncio
 import logging
 import os
 
@@ -198,3 +199,18 @@ async def send_auth_email(to_email: str, action: str, status: str, **kwargs) -> 
         logger.info(f"Auth email sent: action={action}, status={status}, to={to_email}")
     except Exception as e:
         logger.warning(f"Failed to send auth email to {to_email}: {e}")
+
+
+def fire_and_forget_email(to_email: str, action: str, status: str, **kwargs) -> None:
+    """
+    Schedule an email to be sent in the background WITHOUT blocking the caller.
+
+    Use this in route handlers so the API response is returned immediately
+    while the SMTP connection happens in the background.
+    """
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(send_auth_email(to_email, action, status, **kwargs))
+        logger.info(f"Email task scheduled: action={action}, status={status}, to={to_email}")
+    except Exception as e:
+        logger.warning(f"Failed to schedule email task: {e}")

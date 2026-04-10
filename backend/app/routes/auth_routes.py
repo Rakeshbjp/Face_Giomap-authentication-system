@@ -24,7 +24,7 @@ from app.models.user import (
 )
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user, security
-from app.config.email import send_auth_email
+from app.config.email import send_auth_email, fire_and_forget_email
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ async def verify_face(
         if resolved_id:
             user_doc = await db.users.find_one({"_id": ObjectId(resolved_id)}, {"email": 1})
             if user_doc and user_doc.get("email"):
-                await send_auth_email(user_doc["email"], "login", "success")
+                fire_and_forget_email(user_doc["email"], "login", "success")
     else:
         logger.warning(f"Face verification failed for user: {request.user_id}")
 
@@ -237,7 +237,7 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
 
         if not is_verified:
             if user_doc and user_doc.get("email"):
-                await send_auth_email(user_doc["email"], "login", "failure")
+                fire_and_forget_email(user_doc["email"], "login", "failure")
             return FaceVerificationResponse(status=False, message=message, confidence=confidence)
 
         user = await auth_service.get_user_by_id(resolved_id)
@@ -251,7 +251,7 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         login_loc = request.location.model_dump() if request.location else None
         await auth_service._record_login(resolved_id, login_loc)
         
-        await send_auth_email(user["email"], "login", "success")
+        fire_and_forget_email(user["email"], "login", "success")
 
         return {
             "status": True,

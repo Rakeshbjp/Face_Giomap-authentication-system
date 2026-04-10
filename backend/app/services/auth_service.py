@@ -17,7 +17,7 @@ from app.models.user import UserDocument
 from app.services.face_recognition import face_service
 from app.utils.encryption import encrypt_embeddings, decrypt_embeddings
 from app.utils.geocoding import reverse_geocode
-from app.config.email import send_auth_email
+from app.config.email import send_auth_email, fire_and_forget_email
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -233,7 +233,7 @@ class AuthService:
                 msg += " (without face data — you can add it later)"
 
             logger.info(f"User registered successfully: {user_id} (face_data={has_face_data})")
-            await send_auth_email(email, "register", "success")
+            fire_and_forget_email(email, "register", "success")
             return True, msg, user_id
 
         except Exception as e:
@@ -258,11 +258,11 @@ class AuthService:
             user = await self.users_collection.find_one({"email": email})
 
             if not user:
-                await send_auth_email(email, "login", "failure")
+                fire_and_forget_email(email, "login", "failure")
                 return False, "Invalid email or password", None
 
             if not self.verify_password(password, user["password_hash"]):
-                await send_auth_email(email, "login", "failure")
+                fire_and_forget_email(email, "login", "failure")
                 return False, "Invalid email or password", None
 
             # ── Location check ──
@@ -296,7 +296,7 @@ class AuthService:
                     
                     reg_display = f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {reg_addr.get('display_name', 'Location')}"
                     curr_display = f"({location['latitude']:.6f}, {location['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
-                    await send_auth_email(
+                    fire_and_forget_email(
                         email, "login", "location_mismatch",
                         reg_display=email_reg_str,
                         curr_display=email_curr_str
@@ -345,7 +345,7 @@ class AuthService:
                 return True, "Password verified. Face verification required.", token_data
             else:
                 logger.info(f"Password + location OK for user: {user_id} — no face data, login complete")
-                await send_auth_email(email, "login", "success")
+                fire_and_forget_email(email, "login", "success")
                 return True, "Login successful.", token_data
 
         except Exception as e:
@@ -540,7 +540,7 @@ class AuthService:
             )
             if user_doc and user_doc.get("email"):
                 logger.info(f"Sending logout email to {user_doc['email']}")
-                await send_auth_email(user_doc["email"], "login", "logout")
+                fire_and_forget_email(user_doc["email"], "login", "logout")
             else:
                 logger.warning(f"Cannot send logout email — user {user_id} not found or has no email")
         except Exception as e:
