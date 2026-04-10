@@ -120,6 +120,15 @@ _TEMPLATES = {
                 <strong>Location mismatch detected!</strong> You can only login from your currently registered location.
                 To log in from this new location, you must register a new account on this device first.
             </p>
+            
+            <div style="margin: 20px 0; padding: 15px; background: white; border-radius: 8px; border: 1px solid #fde68a;">
+                <p style="margin: 0 0 10px 0; color: #b45309;"><strong>📍 Registered Location:</strong><br/>
+                <span style="color: #92400e;">{reg_display}</span></p>
+                
+                <p style="margin: 0; color: #b45309;"><strong>⚠️ Current Attempt Location:</strong><br/>
+                <span style="color: #92400e;">{curr_display}</span></p>
+            </div>
+            
             <hr style="border: none; border-top: 1px solid #fde68a; margin: 20px 0;">
             <p style="color: #6b7280; font-size: 12px;">
                 This is an automated security alert.
@@ -151,14 +160,15 @@ _TEMPLATES = {
 #  Public API
 # ──────────────────────────────────────────────
 
-async def send_auth_email(to_email: str, action: str, status: str) -> None:
+async def send_auth_email(to_email: str, action: str, status: str, **kwargs) -> None:
     """
     Send an authentication notification email.
 
     Args:
         to_email: Recipient email address.
         action:   'register' | 'login'
-        status:   'success'  | 'failure'
+        status:   'success'  | 'failure' | 'location_mismatch' | 'logout'
+        kwargs:   Optional template variables (e.g., reg_display, curr_display)
 
     This function is fire-and-forget — it never raises.
     If email sending is not configured or fails, it logs a warning and returns silently.
@@ -167,10 +177,14 @@ async def send_auth_email(to_email: str, action: str, status: str) -> None:
         logger.debug("Email sending skipped (MAIL_USERNAME / MAIL_PASSWORD not configured)")
         return
 
-    subject, body = _TEMPLATES.get(
+    subject, raw_body = _TEMPLATES.get(
         (action, status),
         ("Account Notification — Face Auth", "<p>Account activity detected on your Face Auth account.</p>"),
     )
+
+    import collections
+    # Format the body with optional kwargs, defaulting to empty string if missing
+    body = raw_body.format_map(collections.defaultdict(str, kwargs))
 
     try:
         message = MessageSchema(

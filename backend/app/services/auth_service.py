@@ -281,9 +281,31 @@ class AuthService:
                 if dist > LOCATION_RADIUS_M:
                     reg_addr = await reverse_geocode(reg_loc["latitude"], reg_loc["longitude"])
                     curr_addr = await reverse_geocode(location["latitude"], location["longitude"])
+                    
+                    def format_addr(addr_doc, lat, lng):
+                        if not addr_doc or "fallback" in addr_doc:
+                            return f"{lat:.6f}, {lng:.6f}"
+                        parts = [
+                            addr_doc.get("road"),
+                            addr_doc.get("suburb") or addr_doc.get("area"),
+                            addr_doc.get("city"),
+                            addr_doc.get("state"),
+                            addr_doc.get("country"),
+                            addr_doc.get("pincode")
+                        ]
+                        valid_parts = [p for p in parts if p is not None and str(p).strip()]
+                        return ", ".join(valid_parts) if valid_parts else addr_doc.get("display_name", f"{lat:.6f}, {lng:.6f}")
+
+                    email_reg_str = format_addr(reg_addr, reg_loc['latitude'], reg_loc['longitude'])
+                    email_curr_str = format_addr(curr_addr, location['latitude'], location['longitude'])
+                    
                     reg_display = f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {reg_addr.get('display_name', 'Location')}"
                     curr_display = f"({location['latitude']:.6f}, {location['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
-                    await send_auth_email(email, "login", "location_mismatch")
+                    await send_auth_email(
+                        email, "login", "location_mismatch",
+                        reg_display=email_reg_str,
+                        curr_display=email_curr_str
+                    )
                     return (
                         False,
                         f"LOGIN FAILED — Location mismatch! "
