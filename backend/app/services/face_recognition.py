@@ -577,12 +577,12 @@ class FaceRecognitionService:
 
                 logger.info(f"Spoof LBP: entropy={lbp_entropy:.3f}, active_bins={lbp_active_bins}/256")
 
-                if lbp_entropy < 5.9:
+                if lbp_entropy < 5.6:
                     spoof_score += 1
-                    spoof_reasons.append(f"LBP texture too uniform (entropy={lbp_entropy:.2f}<5.9)")
-                if lbp_active_bins < 140:
+                    spoof_reasons.append(f"LBP texture too uniform (entropy={lbp_entropy:.2f}<5.6)")
+                if lbp_active_bins < 110:
                     spoof_score += 1
-                    spoof_reasons.append(f"LBP too few active bins ({lbp_active_bins}<140)")
+                    spoof_reasons.append(f"LBP too few active bins ({lbp_active_bins}<110)")
             except Exception as e:
                 logger.warning(f"LBP check skipped: {e}")
 
@@ -609,7 +609,7 @@ class FaceRecognitionService:
 
                 # Screens have abnormally low chrominance variation
                 # because they emit uniform backlight. Real skin is varied.
-                if cr_std < 8.0 or cb_std < 8.0:
+                if cr_std < 5.0 and cb_std < 5.0:
                     spoof_score += 1
                     spoof_reasons.append(f"Chrominance too flat (Cr_std={cr_std:.1f}, Cb_std={cb_std:.1f})")
 
@@ -653,12 +653,12 @@ class FaceRecognitionService:
                            f"peak_ratio={peak_ratio:.2f}, hf_std={high_freq_std:.2f}")
 
                 # Aggressive thresholds for screen moiré detection
-                if high_freq_mean > 120.0:
+                if high_freq_mean > 130.0:
                     spoof_score += 1
-                    spoof_reasons.append(f"High-frequency energy too strong ({high_freq_mean:.1f}>120)")
-                if peak_ratio > 2.5:
+                    spoof_reasons.append(f"High-frequency energy too strong ({high_freq_mean:.1f}>130)")
+                if peak_ratio > 3.0:
                     spoof_score += 1
-                    spoof_reasons.append(f"Spectral peak detected (ratio={peak_ratio:.1f}>2.5)")
+                    spoof_reasons.append(f"Spectral peak detected (ratio={peak_ratio:.1f}>3.0)")
             except Exception as e:
                 logger.warning(f"FFT check skipped: {e}")
 
@@ -685,12 +685,12 @@ class FaceRecognitionService:
 
                 logger.info(f"Spoof glare: ratio={glare_ratio:.4f}, max_blob_ratio={max_blob_ratio:.4f}")
 
-                if glare_ratio > 0.025:  # 2.5% total glare
+                if glare_ratio > 0.04:  # 4% total glare
                     spoof_score += 1
-                    spoof_reasons.append(f"Excessive glare ({glare_ratio:.3f}>0.025)")
-                if max_blob_ratio > 0.01:  # one big glare patch
+                    spoof_reasons.append(f"Excessive glare ({glare_ratio:.3f}>0.04)")
+                if max_blob_ratio > 0.015:  # one big glare patch
                     spoof_score += 1
-                    spoof_reasons.append(f"Large glare blob ({max_blob_ratio:.4f}>0.01)")
+                    spoof_reasons.append(f"Large glare blob ({max_blob_ratio:.4f}>0.015)")
             except Exception as e:
                 logger.warning(f"Glare check skipped: {e}")
 
@@ -713,10 +713,10 @@ class FaceRecognitionService:
                 logger.info(f"Spoof gradient: mean={grad_mean:.2f}, std={grad_std:.2f}, cv={grad_cv:.3f}")
 
                 # Real faces typically have cv > 1.2
-                # Screens/prints tend to be more uniform (cv < 1.0)
-                if grad_cv < 1.0:
+                # Screens/prints tend to be more uniform (cv < 0.9)
+                if grad_cv < 0.9:
                     spoof_score += 1
-                    spoof_reasons.append(f"Gradient too uniform (cv={grad_cv:.2f}<1.0)")
+                    spoof_reasons.append(f"Gradient too uniform (cv={grad_cv:.2f}<0.9)")
             except Exception as e:
                 logger.warning(f"Gradient check skipped: {e}")
 
@@ -744,9 +744,9 @@ class FaceRecognitionService:
                            f"detail_ratio={detail_ratio:.3f}")
 
                 # Very low fine-detail = flat/screen image
-                if log_small_var < 35.0:
+                if log_small_var < 20.0:
                     spoof_score += 1
-                    spoof_reasons.append(f"Micro-texture too weak (LoG_var={log_small_var:.1f}<35)")
+                    spoof_reasons.append(f"Micro-texture too weak (LoG_var={log_small_var:.1f}<20)")
 
                 # Low contrast overall
                 global_std = float(np.std(gray))
