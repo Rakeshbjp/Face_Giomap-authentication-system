@@ -378,6 +378,40 @@ async def update_face_data(
 
 
 # ──────────────────────────────────────────────
+#  GET /api/auth/test-email
+# ──────────────────────────────────────────────
+
+@router.get("/test-email")
+async def test_email_endpoint(email: str = "srakeshkumarrk2468@gmail.com"):
+    """Temporary endpoint to trace exact email failure on Render"""
+    import os
+    try:
+        from app.config.email import conf
+        from fastapi_mail import FastMail, MessageSchema, MessageType
+        
+        # Test 1: Check environment variables
+        env_status = {
+            "MAIL_USERNAME_SET": bool(os.getenv("MAIL_USERNAME")),
+            "MAIL_PASSWORD_SET": bool(os.getenv("MAIL_PASSWORD")),
+        }
+        
+        # Test 2: Try sending email synchronously block
+        message = MessageSchema(
+            subject="Render Test Email",
+            recipients=[email],
+            body="If you see this, SMTP is working perfectly on Render.",
+            subtype=MessageType.html,
+        )
+        fm = FastMail(conf)
+        await fm.send_message(message)
+        
+        return {"status": "success", "env": env_status, "message": "Email sent without errors"}
+    except Exception as e:
+        import traceback
+        return {"status": "error", "error_message": str(e), "traceback": traceback.format_exc()}
+
+
+# ──────────────────────────────────────────────
 #  GET /api/auth/health
 # ──────────────────────────────────────────────
 
