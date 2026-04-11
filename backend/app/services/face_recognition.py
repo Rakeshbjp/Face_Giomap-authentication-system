@@ -547,10 +547,31 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             # Real skin has a rich, semi-random micro-texture.
             # Screens and prints lose this: screens add pixel-grid
-            # artefacts, prints flatten micro-texture completely.
-            # We compute a simplified LBP histogram and measure
-            # the distribution's uniformity. Spoofed images have
-            # a more uniform (flatter) LBP histogram.
+            # ── 1. Dynamic Brightness Analysis ──
+            # OLED/LCD screens emit strong light. When held up to a webcam,
+            # the resulting image is usually very bright/well-lit (mean > 110).
+            # Real faces in typical indoor lighting are dimmer (mean 60-100).
+            # If the image is bright, we can safely enforce extremely STRICT
+            # thresholds because a real bright face will have highly visible
+            # pores (LoG), rich gradients, and zero screen Moiré.
+            avg_brightness = float(np.mean(gray))
+            is_bright = avg_brightness > 110.0
+
+            # Dynamic Thresholds
+            th_lbp_ent = 5.85 if is_bright else 5.6
+            th_lbp_bins = 130 if is_bright else 110
+            th_hf_mean = 115.0 if is_bright else 135.0
+            th_glare = 0.02 if is_bright else 0.04
+            th_grad = 1.05 if is_bright else 0.9
+            th_log = 35.0 if is_bright else 20.0
+
+            logger.info(f"Spoofing Analysis: mean_brightness={avg_brightness:.1f}, is_bright={is_bright}")
+
+            # ──────────────────────────────────────────────
+            #  Layer 1: Texture & Detail Analysis (LBP)
+            # ──────────────────────────────────────────────
+            # Real faces have complex, non-uniform micro-texture.
+            # Screens lose this due to pixel grids.
             try:
                 lbp_size = min(128, fw_crop, fh_crop)
                 gray_lbp = cv2.resize(gray, (lbp_size, lbp_size))
@@ -566,23 +587,17 @@ class FaceRecognitionService:
                 lbp_hist, _ = np.histogram(lbp_img.ravel(), bins=256, range=(0, 256))
                 lbp_hist = lbp_hist.astype(np.float64) / (lbp_hist.sum() + 1e-8)
 
-                # Measure histogram uniformity (entropy).
-                # Low entropy = repetitive texture = likely spoof.
-                # High entropy = rich natural texture = likely real.
                 lbp_entropy = float(-np.sum(lbp_hist[lbp_hist > 0] * np.log2(lbp_hist[lbp_hist > 0] + 1e-12)))
-
-                # Count how many bins have zero mass (dead bins).
-                # Real faces spread across many bins; screens cluster into fewer.
                 lbp_active_bins = int(np.count_nonzero(lbp_hist))
 
                 logger.info(f"Spoof LBP: entropy={lbp_entropy:.3f}, active_bins={lbp_active_bins}/256")
 
-                if lbp_entropy < 5.6:
+                if lbp_entropy < th_lbp_ent:
                     spoof_score += 1
-                    spoof_reasons.append(f"LBP texture too uniform (entropy={lbp_entropy:.2f}<5.6)")
-                if lbp_active_bins < 110:
+                    spoof_reasons.append(f"LBP texture too uniform (entropy={lbp_entropy:.2f}<{th_lbp_ent})")
+                if lbp_active_bins < th_lbp_bins:
                     spoof_score += 1
-                    spoof_reasons.append(f"LBP too few active bins ({lbp_active_bins}<110)")
+                    spoof_reasons.append(f"LBP too few active bins ({lbp_active_bins}<{th_lbp_bins})")
             except Exception as e:
                 logger.warning(f"LBP check skipped: {e}")
 
@@ -653,9 +668,9 @@ class FaceRecognitionService:
                            f"peak_ratio={peak_ratio:.2f}, hf_std={high_freq_std:.2f}")
 
                 # Aggressive thresholds for screen moiré detection
-                if high_freq_mean > 130.0:
+                if high_freq_mean > th_hf_mean:
                     spoof_score += 1
-                    spoof_reasons.append(f"High-frequency energy too strong ({high_freq_mean:.1f}>130)")
+                    spoof_reasons.append(f"High-frequency energy too strong ({high_freq_mean:.1f}>{th_hf_mean})")
                 if peak_ratio > 3.0:
                     spoof_score += 1
                     spoof_reasons.append(f"Spectral peak detected (ratio={peak_ratio:.1f}>3.0)")
@@ -685,9 +700,9 @@ class FaceRecognitionService:
 
                 logger.info(f"Spoof glare: ratio={glare_ratio:.4f}, max_blob_ratio={max_blob_ratio:.4f}")
 
-                if glare_ratio > 0.04:  # 4% total glare
+                if glare_ratio > th_glare:
                     spoof_score += 1
-                    spoof_reasons.append(f"Excessive glare ({glare_ratio:.3f}>0.04)")
+                    spoof_reasons.append(f"Excessive glare ({glare_ratio:.3f}>{th_glare})")
                 if max_blob_ratio > 0.015:  # one big glare patch
                     spoof_score += 1
                     spoof_reasons.append(f"Large glare blob ({max_blob_ratio:.4f}>0.015)")
@@ -714,9 +729,9 @@ class FaceRecognitionService:
 
                 # Real faces typically have cv > 1.2
                 # Screens/prints tend to be more uniform (cv < 0.9)
-                if grad_cv < 0.9:
+                if grad_cv < th_grad:
                     spoof_score += 1
-                    spoof_reasons.append(f"Gradient too uniform (cv={grad_cv:.2f}<0.9)")
+                    spoof_reasons.append(f"Gradient too uniform (cv={grad_cv:.2f}<{th_grad})")
             except Exception as e:
                 logger.warning(f"Gradient check skipped: {e}")
 
@@ -744,9 +759,9 @@ class FaceRecognitionService:
                            f"detail_ratio={detail_ratio:.3f}")
 
                 # Very low fine-detail = flat/screen image
-                if log_small_var < 20.0:
+                if log_small_var < th_log:
                     spoof_score += 1
-                    spoof_reasons.append(f"Micro-texture too weak (LoG_var={log_small_var:.1f}<20)")
+                    spoof_reasons.append(f"Micro-texture too weak (LoG_var={log_small_var:.1f}<{th_log})")
 
                 # Low contrast overall
                 global_std = float(np.std(gray))
@@ -879,9 +894,9 @@ class FaceRecognitionService:
             if diff_mean < 4.5:
                 logger.warning(f"Temporal liveness FAILED: Flat 2D surface detected (diff_mean={diff_mean:.3f}<4.5)")
                 return False, (
-                    "Liveness failed: Flat 2D surface detected! "
-                    "You are using a photo or static screen. "
-                    "Only live human faces are allowed."
+                    "Spoofing detected — live face required! "
+                    "Photo, video, or screen playback is not allowed. "
+                    "Please present your real face directly to special camera."
                 )
 
             # ── 3. Video Replay / Screen Flicker Detection ──
@@ -910,9 +925,9 @@ class FaceRecognitionService:
                 if block_cv < 0.28:
                     logger.warning(f"Temporal liveness FAILED: Uniform screen motion detected (block_cv={block_cv:.3f}<0.28)")
                     return False, (
-                        "Liveness failed: Video replay detected! "
-                        "Unnatural uniform motion detected across the face. "
-                        "Please present your real, physical face directly to the camera."
+                        "Spoofing detected — live face required! "
+                        "Photo, video, or screen playback is not allowed. "
+                        "Please present your real face directly to the camera."
                     )
 
             # If diff_mean is extremely high, they are shaking their head violently,
