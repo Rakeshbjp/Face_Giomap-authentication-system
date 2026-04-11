@@ -179,13 +179,18 @@ const LocationPage = () => {
                       <p className="text-sm text-blue-300 font-medium">📍 {currentAddress.road}</p>
                     )}
                     <p className="text-xs text-white/70">
-                      {[currentAddress.area, currentAddress.suburb].filter(Boolean).join(', ')}
-                    </p>
-                    <p className="text-xs text-white/50">
-                      {[currentAddress.city, currentAddress.district && currentAddress.district !== currentAddress.city ? currentAddress.district : null, currentAddress.state].filter(Boolean).join(', ')}
+                      {[
+                        currentAddress.area || currentAddress.suburb,
+                        currentAddress.city,
+                        currentAddress.state,
+                        currentAddress.country
+                      ]
+                        .filter(Boolean)
+                        .reduce((acc, curr) => acc.includes(curr) ? acc : [...acc, curr], [])
+                        .join(', ')}
                     </p>
                     {currentAddress.pincode && (
-                      <p className="text-xs text-white/40 mt-0.5">PIN: {currentAddress.pincode}</p>
+                      <p className="text-xs text-white/40 mt-1 font-medium">PIN: {currentAddress.pincode}</p>
                     )}
                   </div>
                 ) : null}
@@ -211,11 +216,19 @@ const LocationPage = () => {
                       <p className="text-sm text-green-300 font-medium">📍 {registeredAddress.road}</p>
                     )}
                     <p className="text-xs text-white/70">
-                      {[registeredAddress.area, registeredAddress.suburb].filter(Boolean).join(', ')}
+                      {[
+                        registeredAddress.area || registeredAddress.suburb,
+                        registeredAddress.city,
+                        registeredAddress.state,
+                        registeredAddress.country
+                      ]
+                        .filter(Boolean)
+                        .reduce((acc, curr) => acc.includes(curr) ? acc : [...acc, curr], [])
+                        .join(', ')}
                     </p>
-                    <p className="text-xs text-white/50">
-                      {[registeredAddress.city, registeredAddress.state, registeredAddress.pincode].filter(Boolean).join(', ')}
-                    </p>
+                    {registeredAddress.pincode && (
+                      <p className="text-xs text-white/40 mt-1 font-medium">PIN: {registeredAddress.pincode}</p>
+                    )}
                   </div>
                 ) : null}
               </div>

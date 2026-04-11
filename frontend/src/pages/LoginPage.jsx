@@ -284,19 +284,19 @@ const LoginPage = () => {
                               ) : regAddress.road || regAddress.area || regAddress.suburb || regAddress.city || regAddress.state ? (
                                 <>
                                   {regAddress.road && <p className="text-xs font-medium text-green-800">{regAddress.road}</p>}
-                                  {(regAddress.area || regAddress.suburb) && (
-                                    <p className="text-xs text-green-700">
-                                      {[regAddress.area, regAddress.suburb]
-                                        .filter(Boolean)
-                                        .reduce((acc, curr) => acc.includes(curr) ? acc : [...acc, curr], [])
-                                        .join(', ')}
-                                    </p>
-                                  )}
-                                  <p className="text-xs text-green-600">
-                                    {[regAddress.city, regAddress.district && regAddress.district !== regAddress.city ? regAddress.district : null, regAddress.state].filter(Boolean).join(', ')}
+                                  <p className="text-xs text-green-700">
+                                    {[
+                                      regAddress.area || regAddress.suburb,
+                                      regAddress.city,
+                                      regAddress.state,
+                                      regAddress.country
+                                    ]
+                                      .filter(Boolean)
+                                      .reduce((acc, curr) => acc.includes(curr) ? acc : [...acc, curr], [])
+                                      .join(', ')}
                                   </p>
                                   {regAddress.pincode && (
-                                    <p className="text-xs text-green-500">Pincode: {regAddress.pincode}</p>
+                                    <p className="text-xs text-green-500 font-medium pt-0.5">Pincode: {regAddress.pincode}</p>
                                   )}
                                 </>
                               ) : regAddress.display_name ? (
@@ -324,19 +324,19 @@ const LoginPage = () => {
                               ) : curAddress.road || curAddress.area || curAddress.suburb || curAddress.city || curAddress.state ? (
                                 <>
                                   {curAddress.road && <p className="text-xs font-medium text-red-800">{curAddress.road}</p>}
-                                  {(curAddress.area || curAddress.suburb) && (
-                                    <p className="text-xs text-red-700">
-                                      {[curAddress.area, curAddress.suburb]
-                                        .filter(Boolean)
-                                        .reduce((acc, curr) => acc.includes(curr) ? acc : [...acc, curr], [])
-                                        .join(', ')}
-                                    </p>
-                                  )}
-                                  <p className="text-xs text-red-600">
-                                    {[curAddress.city, curAddress.district && curAddress.district !== curAddress.city ? curAddress.district : null, curAddress.state].filter(Boolean).join(', ')}
+                                  <p className="text-xs text-red-700">
+                                    {[
+                                      curAddress.area || curAddress.suburb,
+                                      curAddress.city,
+                                      curAddress.state,
+                                      curAddress.country
+                                    ]
+                                      .filter(Boolean)
+                                      .reduce((acc, curr) => acc.includes(curr) ? acc : [...acc, curr], [])
+                                      .join(', ')}
                                   </p>
                                   {curAddress.pincode && (
-                                    <p className="text-xs text-red-500">Pincode: {curAddress.pincode}</p>
+                                    <p className="text-xs text-red-500 font-medium pt-0.5">Pincode: {curAddress.pincode}</p>
                                   )}
                                 </>
                               ) : curAddress.display_name ? (
