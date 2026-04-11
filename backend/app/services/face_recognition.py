@@ -880,9 +880,40 @@ class FaceRecognitionService:
                 logger.warning(f"Temporal liveness FAILED: Flat 2D surface detected (diff_mean={diff_mean:.3f}<4.5)")
                 return False, (
                     "Liveness failed: Flat 2D surface detected! "
-                    "You are using a photo or video replay. "
+                    "You are using a photo or static screen. "
                     "Only live human faces are allowed."
                 )
+
+            # ── 3. Video Replay / Screen Flicker Detection ──
+            # A recorded video of a person moving WILL have diff_mean > 4.5.
+            # However, videos played on screens introduce highly uniform refresh flicker
+            # and compression noise across the entire surface.
+            # A real face has non-uniform movement (eyes/lips move more than cheeks).
+            grid_size = 4
+            h_diff, w_diff = diff.shape
+            block_h = max(1, h_diff // grid_size)
+            block_w = max(1, w_diff // grid_size)
+
+            block_diffs = []
+            for gy in range(grid_size):
+                for gx in range(grid_size):
+                    block = diff[gy*block_h:(gy+1)*block_h, gx*block_w:(gx+1)*block_w]
+                    if block.size > 0:
+                        block_diffs.append(float(np.mean(block)))
+
+            if block_diffs:
+                block_cv = float(np.std(block_diffs)) / (float(np.mean(block_diffs)) + 1e-8)
+                logger.info(f"Video Replay Check: block_cv={block_cv:.3f}")
+
+                # Typical real face block_cv is usually > 0.40 due to blinking/breathing/3D parallax.
+                # Video replay on screens results in highly uniform difference (block_cv < 0.25)
+                if block_cv < 0.28:
+                    logger.warning(f"Temporal liveness FAILED: Uniform screen motion detected (block_cv={block_cv:.3f}<0.28)")
+                    return False, (
+                        "Liveness failed: Video replay detected! "
+                        "Unnatural uniform motion detected across the face. "
+                        "Please present your real, physical face directly to the camera."
+                    )
 
             # If diff_mean is extremely high, they are shaking their head violently,
             # or it's a completely different frame (e.g. video cut)
