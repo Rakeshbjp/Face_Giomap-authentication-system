@@ -199,3 +199,24 @@ async def send_auth_email(to_email: str, action: str, status: str, **kwargs) -> 
         logger.info(f"Auth email sent: action={action}, status={status}, to={to_email}")
     except Exception as e:
         logger.warning(f"Failed to send auth email to {to_email}: {e}")
+
+_email_tasks = set()
+
+def fire_and_forget_email(to_email: str, action: str, status: str, **kwargs) -> None:
+    """
+    Schedule an email to be sent in the background safely.
+    Maintains a strong reference to avoid the task being garbage-collected mid-execution
+    and bypasses Starlette's BaseHTTPMiddleware background task dropping bugs.
+    """
+    try:
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
+            
+        task = loop.create_task(send_auth_email(to_email, action, status, **kwargs))
+        _email_tasks.add(task)
+        task.add_done_callback(_email_tasks.discard)
+        logger.info(f"Email task scheduled: action={action}, status={status}, to={to_email}")
+    except Exception as e:
+        logger.warning(f"Failed to schedule email task: {e}")
