@@ -200,23 +200,25 @@ async def send_auth_email(to_email: str, action: str, status: str, **kwargs) -> 
     except Exception as e:
         logger.warning(f"Failed to send auth email to {to_email}: {e}")
 
-_email_tasks = set()
+import threading
 
 def fire_and_forget_email(to_email: str, action: str, status: str, **kwargs) -> None:
     """
     Schedule an email to be sent in the background safely.
-    Maintains a strong reference to avoid the task being garbage-collected mid-execution
-    and bypasses Starlette's BaseHTTPMiddleware background task dropping bugs.
+    Uses a dedicated OS thread to completely isolate the email dispatching from
+    Uvicorn/Starlette's asyncio event loop. This reliably guarantees email delivery
+    even if the HTTP response has already completed, bypassing framework bugs entirely.
     """
-    try:
+    def thread_target():
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.get_event_loop()
-            
-        task = loop.create_task(send_auth_email(to_email, action, status, **kwargs))
-        _email_tasks.add(task)
-        task.add_done_callback(_email_tasks.discard)
-        logger.info(f"Email task scheduled: action={action}, status={status}, to={to_email}")
+            # Create a fresh event loop specifically for this email task
+            asyncio.run(send_auth_email(to_email, action, status, **kwargs))
+        except Exception as e:
+            logger.error(f"Threaded email task failed: {e}")
+
+    try:
+        thread = threading.Thread(target=thread_target, daemon=True)
+        thread.start()
+        logger.info(f"Email task cleanly dispatched to background thread: action={action}, status={status}, to={to_email}")
     except Exception as e:
-        logger.warning(f"Failed to schedule email task: {e}")
+        logger.warning(f"Failed to dispatch email thread: {e}")
