@@ -166,7 +166,7 @@ class AuthService:
             )
             if existing:
                 if existing.get("email") == email:
-                    await send_auth_email(email, "register", "failure")
+                    fire_and_forget_email(email, "register", "failure")
                     return False, "Email already registered", None
                 return False, "Phone number already registered", None
 
