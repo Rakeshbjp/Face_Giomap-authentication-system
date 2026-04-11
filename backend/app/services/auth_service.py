@@ -17,7 +17,7 @@ from app.models.user import UserDocument
 from app.services.face_recognition import face_service
 from app.utils.encryption import encrypt_embeddings, decrypt_embeddings
 from app.utils.geocoding import reverse_geocode
-from app.config.email import send_auth_email, fire_and_forget_email
+
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -166,7 +166,7 @@ class AuthService:
             )
             if existing:
                 if existing.get("email") == email:
-                    await send_auth_email(email, "register", "failure")
+
                     return False, "Email already registered", None
                 return False, "Phone number already registered", None
 
@@ -233,7 +233,7 @@ class AuthService:
                 msg += " (without face data — you can add it later)"
 
             logger.info(f"User registered successfully: {user_id} (face_data={has_face_data})")
-            fire_and_forget_email(email, "register", "success")
+
             return True, msg, user_id
 
         except Exception as e:
@@ -258,11 +258,11 @@ class AuthService:
             user = await self.users_collection.find_one({"email": email})
 
             if not user:
-                fire_and_forget_email(email, "login", "failure")
+
                 return False, "Invalid email or password", None
 
             if not self.verify_password(password, user["password_hash"]):
-                fire_and_forget_email(email, "login", "failure")
+
                 return False, "Invalid email or password", None
 
             # ── Location check ──
@@ -296,13 +296,7 @@ class AuthService:
                     
                     reg_display = f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {reg_addr.get('display_name', 'Location')}"
                     curr_display = f"({location['latitude']:.6f}, {location['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
-                    
-                    fire_and_forget_email(
-                        email, "login", "location_mismatch",
-                        reg_display=email_reg_str,
-                        curr_display=email_curr_str
-                    )
-                    
+
                     return (
                         False,
                         f"LOGIN FAILED — Location mismatch! "
@@ -347,7 +341,7 @@ class AuthService:
                 return True, "Password verified. Face verification required.", token_data
             else:
                 logger.info(f"Password + location OK for user: {user_id} — no face data, login complete")
-                fire_and_forget_email(email, "login", "success")
+
                 return True, "Login successful.", token_data
 
         except Exception as e:
@@ -359,7 +353,7 @@ class AuthService:
     # ──────────────────────────────────────────────
 
     async def verify_face(
-        self, user_id: str, face_image: str
+        self, user_id: str, face_image: str, challenge_frame: Optional[str] = None
     ) -> Tuple[bool, str, Optional[float]]:
         """
         Verify a user's face against their stored embeddings.
@@ -367,6 +361,7 @@ class AuthService:
         Args:
             user_id: User ID (ObjectId string or email) to verify against.
             face_image: Base64-encoded face image.
+            challenge_frame: Optional second frame captured ~400ms later for temporal liveness.
 
         Returns:
             Tuple of (is_verified, message, confidence_score).
@@ -384,7 +379,18 @@ class AuthService:
             if not user.get("face_embeddings"):
                 return False, "No face data registered for this user", None
 
-            # Extract embedding from live image (strict quality checks + full-face validation)
+            # ── Temporal Liveness Check (multi-frame anti-spoofing) ──
+            # If a challenge frame is provided, verify temporal liveness FIRST.
+            # This catches photos and screen replays that pass single-frame checks.
+            if challenge_frame:
+                is_live, live_reason = face_service.verify_temporal_liveness(
+                    face_image, challenge_frame
+                )
+                if not is_live:
+                    logger.warning(f"Temporal liveness failed for user {user_id}: {live_reason}")
+                    return False, live_reason, None
+
+            # Extract embedding from live image (strict quality checks + full-face validation + single-frame anti-spoofing)
             live_embedding, reason = face_service.extract_embedding_with_reason(face_image, strict=True)
             if live_embedding is None:
                 return False, reason, None
@@ -506,7 +512,6 @@ class AuthService:
 
     async def record_logout(self, user_id: str):
         """Record logout time for the user's most recent session."""
-        # Step 1: Record logout in the database
         try:
             now = datetime.utcnow()
             # Update the last session's logout_at
@@ -532,18 +537,7 @@ class AuthService:
                     {"$set": {"last_logout_at": now}},
                 )
             logger.info(f"Logout recorded for user: {user_id}")
-        except Exception as e:
-            logger.warning(f"Failed to record logout session: {e}")
+            
 
-        # Step 2: Send logout notification email (always attempted, even if step 1 fails)
-        try:
-            user_doc = await self.users_collection.find_one(
-                {"_id": ObjectId(user_id)}, {"email": 1}
-            )
-            if user_doc and user_doc.get("email"):
-                logger.info(f"Sending logout email to {user_doc['email']}")
-                fire_and_forget_email(user_doc["email"], "login", "logout")
-            else:
-                logger.warning(f"Cannot send logout email — user {user_id} not found or has no email")
         except Exception as e:
-            logger.error(f"Failed to send logout email for user {user_id}: {e}")
+            logger.warning(f"Failed to record logout: {e}")

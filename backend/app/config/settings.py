@@ -45,12 +45,7 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
-    # Email (Gmail SMTP)
-    MAIL_USERNAME: str = ""
-    MAIL_PASSWORD: str = ""
-    MAIL_FROM: str = ""
-    MAIL_PORT: int = 587
-    MAIL_SERVER: str = "smtp.gmail.com"
+
 
     # Logging
     LOG_LEVEL: str = "INFO"

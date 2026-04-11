@@ -78,6 +78,10 @@ class FaceVerifyRequest(BaseModel):
     """Schema for face verification request."""
     user_id: str = Field(..., description="User ID to verify against")
     face_image: str = Field(..., description="Base64-encoded face image for verification")
+    challenge_frame: Optional[str] = Field(
+        default=None,
+        description="Second base64 frame captured ~400ms after face_image for temporal liveness detection."
+    )
     location: Optional[LocationData] = Field(
         default=None,
         description="Current GPS coordinates for location verification during face login."

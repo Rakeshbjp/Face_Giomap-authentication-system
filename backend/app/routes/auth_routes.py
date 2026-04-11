@@ -24,7 +24,7 @@ from app.models.user import (
 )
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user, security
-from app.config.email import send_auth_email, fire_and_forget_email
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +71,7 @@ async def register_user(request: UserRegisterRequest, db=Depends(get_database)):
 # ──────────────────────────────────────────────
 
 @router.post("/login", response_model=AuthTokenResponse)
-async def login_user(
-    request: UserLoginRequest,
-    db=Depends(get_database)
-):
+async def login_user(request: UserLoginRequest, db=Depends(get_database)):
     """
     Login with email and password.
 
@@ -119,16 +116,11 @@ async def verify_face(
     is_verified, message, confidence = await auth_service.verify_face(
         user_id=request.user_id,
         face_image=request.face_image,
+        challenge_frame=request.challenge_frame,
     )
 
     if is_verified:
         logger.info(f"Face verified for user: {request.user_id}")
-        # Send login success email now that full authentication is complete
-        resolved_id = await auth_service.resolve_user_id(request.user_id)
-        if resolved_id:
-            user_doc = await db.users.find_one({"_id": ObjectId(resolved_id)}, {"email": 1})
-            if user_doc and user_doc.get("email"):
-                fire_and_forget_email(user_doc["email"], "login", "success")
     else:
         logger.warning(f"Face verification failed for user: {request.user_id}")
 
@@ -208,13 +200,7 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
                     reg_display = f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {reg_addr.get('display_name', 'Location')}"
                     curr_display = f"({login_loc['latitude']:.6f}, {login_loc['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
                     
-                    if user_doc.get("email"):
-                        fire_and_forget_email(
-                            user_doc["email"], "login", "location_mismatch",
-                            reg_display=email_reg_str,
-                            curr_display=email_curr_str
-                        )
-                    
+
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=(
@@ -236,11 +222,11 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         is_verified, message, confidence = await auth_service.verify_face(
             user_id=resolved_id,
             face_image=request.face_image,
+            challenge_frame=request.challenge_frame,
         )
 
         if not is_verified:
-            if user_doc and user_doc.get("email"):
-                fire_and_forget_email(user_doc["email"], "login", "failure")
+
             return FaceVerificationResponse(status=False, message=message, confidence=confidence)
 
         user = await auth_service.get_user_by_id(resolved_id)
@@ -254,7 +240,7 @@ async def face_login(request: FaceVerifyRequest, db=Depends(get_database)):
         login_loc = request.location.model_dump() if request.location else None
         await auth_service._record_login(resolved_id, login_loc)
         
-        fire_and_forget_email(user["email"], "login", "success")
+
 
         return {
             "status": True,
@@ -375,40 +361,6 @@ async def update_face_data(
         status=True,
         message=f"Face data updated successfully ({len(embeddings)} views enrolled)",
     )
-
-
-# ──────────────────────────────────────────────
-#  GET /api/auth/test-email
-# ──────────────────────────────────────────────
-
-@router.get("/test-email")
-async def test_email_endpoint(email: str = "srakeshkumarrk2468@gmail.com"):
-    """Temporary endpoint to trace exact email failure on Render"""
-    import os
-    try:
-        from app.config.email import conf
-        from fastapi_mail import FastMail, MessageSchema, MessageType
-        
-        # Test 1: Check environment variables
-        env_status = {
-            "MAIL_USERNAME_SET": bool(os.getenv("MAIL_USERNAME")),
-            "MAIL_PASSWORD_SET": bool(os.getenv("MAIL_PASSWORD")),
-        }
-        
-        # Test 2: Try sending email synchronously block
-        message = MessageSchema(
-            subject="Render Test Email",
-            recipients=[email],
-            body="If you see this, SMTP is working perfectly on Render.",
-            subtype=MessageType.html,
-        )
-        fm = FastMail(conf)
-        await fm.send_message(message)
-        
-        return {"status": "success", "env": env_status, "message": "Email sent without errors"}
-    except Exception as e:
-        import traceback
-        return {"status": "error", "error_message": str(e), "traceback": traceback.format_exc()}
 
 
 # ──────────────────────────────────────────────

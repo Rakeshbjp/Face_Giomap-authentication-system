@@ -187,14 +187,14 @@ const LoginPage = () => {
    * Uses verify-face (after password login) or face-login (direct face login).
    */
   const verifyFn = useCallback(
-    async (uid, image) => {
+    async (uid, image, challengeFrame = null) => {
       if (loginMode === 'face') {
         const locationData = geoPosition
           ? { latitude: geoPosition.latitude, longitude: geoPosition.longitude }
           : null;
-        return await faceLogin(uid, image, locationData);
+        return await faceLogin(uid, image, locationData, challengeFrame);
       }
-      return await verifyFace(uid, image);
+      return await verifyFace(uid, image, challengeFrame);
     },
     [loginMode, geoPosition]
   );

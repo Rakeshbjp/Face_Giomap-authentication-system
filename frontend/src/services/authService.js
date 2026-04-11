@@ -35,11 +35,15 @@ export const loginWithPassword = async (email, password, location = null) => {
  * @param {string} faceImage - Base64-encoded face image
  * @returns {Promise} Verification result
  */
-export const verifyFace = async (userId, faceImage) => {
-  const response = await api.post('/auth/verify-face', {
+export const verifyFace = async (userId, faceImage, challengeFrame = null) => {
+  const payload = {
     user_id: userId,
     face_image: faceImage,
-  });
+  };
+  if (challengeFrame) {
+    payload.challenge_frame = challengeFrame;
+  }
+  const response = await api.post('/auth/verify-face', payload);
   return response.data;
 };
 
@@ -49,7 +53,7 @@ export const verifyFace = async (userId, faceImage) => {
  * @param {string} faceImage - Base64-encoded face image
  * @returns {Promise} API response with tokens
  */
-export const faceLogin = async (userId, faceImage, location = null) => {
+export const faceLogin = async (userId, faceImage, location = null, challengeFrame = null) => {
   try {
     const payload = {
       user_id: userId,
@@ -57,6 +61,9 @@ export const faceLogin = async (userId, faceImage, location = null) => {
     };
     if (location) {
       payload.location = location;
+    }
+    if (challengeFrame) {
+      payload.challenge_frame = challengeFrame;
     }
     const response = await api.post('/auth/face-login', payload);
     return response.data;

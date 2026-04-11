@@ -42,12 +42,14 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
   }, []);
 
   /**
-   * Core verify logic — captures a frame and sends for verification.
-   * Returns the result for the caller to act upon.
+   * Core verify logic — captures TWO frames 400ms apart for temporal
+   * liveness detection, then sends both for verification.
+   * The challenge_frame lets the backend detect static photos and screen replays.
    */
   const doVerify = useCallback(async () => {
     if (!isActive || isScanningRef.current) return null;
 
+    // ── Frame 1: Primary face image ──
     const image = captureImage();
     if (!image) {
       return { success: false, message: 'Could not capture image', confidence: null };
@@ -57,8 +59,27 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
     setStatus('scanning');
     setShowPopup(false);
 
+    // ── Frame 2: Challenge frame captured ~400ms later ──
+    // A real face will have natural micro-movements between frames.
+    // A photo or screen replay will be static or uniformly changing.
+    let challengeFrame = null;
     try {
-      const result = await verifyFn(userId, image);
+      challengeFrame = await new Promise((resolve) => {
+        setTimeout(() => {
+          if (mountedRef.current) {
+            resolve(captureImage());
+          } else {
+            resolve(null);
+          }
+        }, 400);
+      });
+    } catch {
+      // If challenge frame fails, proceed without it
+      challengeFrame = null;
+    }
+
+    try {
+      const result = await verifyFn(userId, image, challengeFrame);
 
       if (!mountedRef.current) return null;
 
