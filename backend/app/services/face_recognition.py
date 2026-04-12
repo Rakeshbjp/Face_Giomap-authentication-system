@@ -830,14 +830,13 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Final Decision: Vote-based scoring
             # ──────────────────────────────────────────────
-            # We use a voting system: if 3 or more independent
+            # We use a voting system: if 2 or more independent
             # layers flag the image as suspicious, we reject it.
-            # With 8 layers, requiring 3 votes prevents false positives
-            # from noisy checks while reliably catching real spoofs
-            # (which typically trigger 4-6 layers simultaneously).
+            # Real faces trigger 0-1 layers; screens/photos/videos
+            # trigger 2-5 layers, so threshold of 2 is the sweet spot.
             logger.info(f"Spoof score: {spoof_score}/8 layers flagged. Reasons: {spoof_reasons}")
 
-            if spoof_score >= 3:
+            if spoof_score >= 2:
                 reason_text = "; ".join(spoof_reasons[:3])  # show top 3 reasons
                 logger.warning(f"SPOOFING DETECTED (score={spoof_score}): {reason_text}")
                 return False, (
