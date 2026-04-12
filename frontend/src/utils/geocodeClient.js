@@ -69,7 +69,25 @@ export async function reverseGeocodeClient(latitude, longitude) {
     result.pincode = addr.postcode || '';
     result.display_name = data.display_name || '';
   } catch (err) {
-    console.warn('Client-side geocoding failed:', err);
+    console.warn('Nominatim client-side geocoding failed:', err, 'Attempting fallback...');
+    try {
+      const fallbackParams = new URLSearchParams({
+        latitude: latitude.toString(),
+        longitude: longitude.toString(),
+        localityLanguage: 'en',
+      });
+      const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?${fallbackParams}`);
+      if (res.ok) {
+        const data = await res.json();
+        result.city = data.city || data.locality || '';
+        result.state = data.principalSubdivision || '';
+        result.country = data.countryName || '';
+        result.pincode = data.postcode || '';
+        result.display_name = [result.city, result.state, result.country].filter(Boolean).join(', ');
+      }
+    } catch (fallbackErr) {
+      console.warn('Fallback client-side geocoding also failed:', fallbackErr);
+    }
   }
 
   return result;

@@ -59,12 +59,22 @@ const LoginPage = () => {
       return { fallback: `${lat.toFixed(6)}, ${lng.toFixed(6)}` };
     };
 
-    if (regMatch) {
-      resolveAddress(parseFloat(regMatch[1]), parseFloat(regMatch[2])).then(setRegAddress);
-    }
-    if (curMatch) {
-      resolveAddress(parseFloat(curMatch[1]), parseFloat(curMatch[2])).then(setCurAddress);
-    }
+    const processAddresses = async () => {
+      if (regMatch) {
+        const addr = await resolveAddress(parseFloat(regMatch[1]), parseFloat(regMatch[2]));
+        setRegAddress(addr);
+        if (curMatch) {
+          // Delay by 1.5 seconds to prevent 'Too Many Requests' from strict APIs like Nominatim
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+      if (curMatch) {
+        const addr = await resolveAddress(parseFloat(curMatch[1]), parseFloat(curMatch[2]));
+        setCurAddress(addr);
+      }
+    };
+
+    processAddresses();
   }, [locationError]);
 
   /**

@@ -123,6 +123,25 @@ async def reverse_geocode(latitude: float, longitude: float) -> dict:
         )
 
     except Exception as e:
-        logger.warning(f"Reverse geocoding failed for ({latitude}, {longitude}): {e}")
+        logger.warning(f"Nominatim failed for ({latitude}, {longitude}): {e}. Attempting BigDataCloud fallback...")
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.get(
+                    "https://api.bigdatacloud.net/data/reverse-geocode-client",
+                    params={"latitude": latitude, "longitude": longitude, "localityLanguage": "en"}
+                )
+                res.raise_for_status()
+                data = res.json()
+                
+                result["city"] = data.get("city") or data.get("locality") or ""
+                result["state"] = data.get("principalSubdivision") or ""
+                result["country"] = data.get("countryName") or ""
+                result["pincode"] = data.get("postcode") or ""
+                result["display_name"] = ", ".join(filter(None, [result["city"], result["state"], result["country"]]))
+                
+                # In the free client API, road and area are not guaranteed, but context is accurately maintained
+                logger.info(f"Fallback geocoded: {result['display_name']}")
+        except Exception as fallback_e:
+            logger.warning(f"Fallback geocoding also failed: {fallback_e}")
 
     return result
