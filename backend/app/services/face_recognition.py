@@ -555,15 +555,17 @@ class FaceRecognitionService:
             # thresholds because a real bright face will have highly visible
             # pores (LoG), rich gradients, and zero screen Moiré.
             avg_brightness = float(np.mean(gray))
-            is_bright = avg_brightness > 95.0  # lowered from 110 — OLED screens can be moderately bright
+            is_bright = avg_brightness > 110.0
 
-            # Dynamic Thresholds — tightened to catch high-quality phone screens
-            th_lbp_ent = 5.9 if is_bright else 5.65
-            th_lbp_bins = 135 if is_bright else 115
-            th_hf_mean = 110.0 if is_bright else 130.0
-            th_glare = 0.015 if is_bright else 0.035
-            th_grad = 1.1 if is_bright else 0.95
-            th_log = 40.0 if is_bright else 25.0
+            # Dynamic Thresholds — proven balanced values
+            # These are strict enough to catch screens/prints but relaxed
+            # enough to let real live faces pass in varied lighting.
+            th_lbp_ent = 5.85 if is_bright else 5.6
+            th_lbp_bins = 130 if is_bright else 110
+            th_hf_mean = 115.0 if is_bright else 135.0
+            th_glare = 0.02 if is_bright else 0.04
+            th_grad = 1.05 if is_bright else 0.9
+            th_log = 35.0 if is_bright else 20.0
 
             logger.info(f"Spoofing Analysis: mean_brightness={avg_brightness:.1f}, is_bright={is_bright}")
 
@@ -786,16 +788,17 @@ class FaceRecognitionService:
 
                 logger.info(f"Spoof HSV Sat: mean={sat_mean:.1f}, std={sat_std:.2f}, cv={sat_cv:.3f}")
 
-                # Screens typically have low saturation variation (cv < 0.35)
-                # Real faces have rich saturation variation (cv > 0.45)
-                if sat_cv < 0.35:
+                # Screens typically have very low saturation variation (cv < 0.22)
+                # Real faces have richer saturation variation (cv > 0.30)
+                # Using conservative threshold to avoid blocking real faces
+                if sat_cv < 0.22:
                     spoof_score += 1
-                    spoof_reasons.append(f"Saturation too uniform (cv={sat_cv:.2f}<0.35)")
+                    spoof_reasons.append(f"Saturation too uniform (cv={sat_cv:.2f}<0.22)")
 
                 # Very low saturation = washed out screen light
-                if sat_mean < 20.0:
+                if sat_mean < 12.0:
                     spoof_score += 1
-                    spoof_reasons.append(f"Saturation too low (mean={sat_mean:.1f}<20)")
+                    spoof_reasons.append(f"Saturation too low (mean={sat_mean:.1f}<12)")
             except Exception as e:
                 logger.warning(f"HSV saturation check skipped: {e}")
 
@@ -827,13 +830,14 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Final Decision: Vote-based scoring
             # ──────────────────────────────────────────────
-            # We use a voting system: if 2 or more independent
+            # We use a voting system: if 3 or more independent
             # layers flag the image as suspicious, we reject it.
-            # This prevents false positives from any single noisy check,
-            # while catching real spoofs that trigger multiple detectors.
+            # With 8 layers, requiring 3 votes prevents false positives
+            # from noisy checks while reliably catching real spoofs
+            # (which typically trigger 4-6 layers simultaneously).
             logger.info(f"Spoof score: {spoof_score}/8 layers flagged. Reasons: {spoof_reasons}")
 
-            if spoof_score >= 2:
+            if spoof_score >= 3:
                 reason_text = "; ".join(spoof_reasons[:3])  # show top 3 reasons
                 logger.warning(f"SPOOFING DETECTED (score={spoof_score}): {reason_text}")
                 return False, (
@@ -973,24 +977,10 @@ class FaceRecognitionService:
                 block_cv = float(np.std(block_diffs)) / (float(np.mean(block_diffs)) + 1e-8)
                 logger.info(f"Video Replay Check: block_cv={block_cv:.3f}, diff_mean={diff_mean:.3f}")
 
-                # Typical real face block_cv is usually > 0.45 due to blinking/breathing/3D parallax.
-                # Video replay on screens results in highly uniform difference (block_cv < 0.35)
-                if block_cv < 0.35:
-                    logger.warning(f"Temporal liveness FAILED: Uniform screen motion detected (block_cv={block_cv:.3f}<0.35)")
-                    return False, (
-                        "Spoofing detected — live face required! "
-                        "Photo, video, or screen playback is not allowed. "
-                        "Please present your real face directly to the camera."
-                    )
-
-                # Borderline detection: if diff_mean is low-ish (4.5-7.0) AND
-                # block_cv is moderately uniform (<0.45), it's likely a video with
-                # slight camera shake but still flat screen movement patterns.
-                if diff_mean < 7.0 and block_cv < 0.45:
-                    logger.warning(
-                        f"Temporal liveness FAILED: Borderline video replay "
-                        f"(diff_mean={diff_mean:.3f}<7.0 AND block_cv={block_cv:.3f}<0.45)"
-                    )
+                # Typical real face block_cv is usually > 0.40 due to blinking/breathing/3D parallax.
+                # Video replay on screens results in highly uniform difference (block_cv < 0.28)
+                if block_cv < 0.28:
+                    logger.warning(f"Temporal liveness FAILED: Uniform screen motion detected (block_cv={block_cv:.3f}<0.28)")
                     return False, (
                         "Spoofing detected — live face required! "
                         "Photo, video, or screen playback is not allowed. "
