@@ -390,7 +390,19 @@ class AuthService:
                     logger.warning(f"Temporal liveness failed for user {user_id}: {live_reason}")
                     return False, live_reason, None
 
-            # Extract embedding from live image (strict quality checks + full-face validation + single-frame anti-spoofing)
+            # ── Single-Frame Anti-Spoofing (photo/video/print detection) ──
+            # This is the 6-layer defence engine that detects screens, prints,
+            # and video replays using texture, colour, frequency, and gradient analysis.
+            # CRITICAL: This was previously missing from the login flow!
+            spoof_image = face_service._decode_base64_image(face_image)
+            spoof_face = face_service._detect_face(spoof_image, strict=False)
+            if spoof_face is not None:
+                spoof_ok, spoof_msg = face_service._detect_spoofing(spoof_image, spoof_face)
+                if not spoof_ok:
+                    logger.warning(f"Single-frame anti-spoofing BLOCKED login for user {user_id}: {spoof_msg}")
+                    return False, spoof_msg, None
+
+            # Extract embedding from live image (strict quality checks + full-face validation)
             live_embedding, reason = face_service.extract_embedding_with_reason(face_image, strict=True)
             if live_embedding is None:
                 return False, reason, None

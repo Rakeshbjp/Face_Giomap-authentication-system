@@ -555,15 +555,15 @@ class FaceRecognitionService:
             # thresholds because a real bright face will have highly visible
             # pores (LoG), rich gradients, and zero screen Moiré.
             avg_brightness = float(np.mean(gray))
-            is_bright = avg_brightness > 110.0
+            is_bright = avg_brightness > 95.0  # lowered from 110 — OLED screens can be moderately bright
 
-            # Dynamic Thresholds
-            th_lbp_ent = 5.85 if is_bright else 5.6
-            th_lbp_bins = 130 if is_bright else 110
-            th_hf_mean = 115.0 if is_bright else 135.0
-            th_glare = 0.02 if is_bright else 0.04
-            th_grad = 1.05 if is_bright else 0.9
-            th_log = 35.0 if is_bright else 20.0
+            # Dynamic Thresholds — tightened to catch high-quality phone screens
+            th_lbp_ent = 5.9 if is_bright else 5.65
+            th_lbp_bins = 135 if is_bright else 115
+            th_hf_mean = 110.0 if is_bright else 130.0
+            th_glare = 0.015 if is_bright else 0.035
+            th_grad = 1.1 if is_bright else 0.95
+            th_log = 40.0 if is_bright else 25.0
 
             logger.info(f"Spoofing Analysis: mean_brightness={avg_brightness:.1f}, is_bright={is_bright}")
 
@@ -772,13 +772,66 @@ class FaceRecognitionService:
                 logger.warning(f"LoG check skipped: {e}")
 
             # ──────────────────────────────────────────────
+            #  Layer 7: HSV Saturation Uniformity
+            # ──────────────────────────────────────────────
+            # Screens emit uniformly saturated light from their backlight.
+            # Real skin has varied saturation due to blood vessels, oil,
+            # shadows, pores, and 3D curvature.
+            try:
+                hsv = cv2.cvtColor(face_crop, cv2.COLOR_BGR2HSV)
+                sat_channel = hsv[:, :, 1].astype(np.float64)
+                sat_mean = float(np.mean(sat_channel))
+                sat_std = float(np.std(sat_channel))
+                sat_cv = sat_std / (sat_mean + 1e-8)
+
+                logger.info(f"Spoof HSV Sat: mean={sat_mean:.1f}, std={sat_std:.2f}, cv={sat_cv:.3f}")
+
+                # Screens typically have low saturation variation (cv < 0.35)
+                # Real faces have rich saturation variation (cv > 0.45)
+                if sat_cv < 0.35:
+                    spoof_score += 1
+                    spoof_reasons.append(f"Saturation too uniform (cv={sat_cv:.2f}<0.35)")
+
+                # Very low saturation = washed out screen light
+                if sat_mean < 20.0:
+                    spoof_score += 1
+                    spoof_reasons.append(f"Saturation too low (mean={sat_mean:.1f}<20)")
+            except Exception as e:
+                logger.warning(f"HSV saturation check skipped: {e}")
+
+            # ──────────────────────────────────────────────
+            #  Layer 8: Color Channel Correlation
+            # ──────────────────────────────────────────────
+            # Screen sub-pixels (RGB) create highly correlated color channels
+            # because the backlight illuminates all channels uniformly.
+            # Real faces under natural/indoor lighting have less correlated
+            # channels due to varying skin pigmentation and ambient color temperature.
+            try:
+                b_ch = face_crop[:, :, 0].astype(np.float64).flatten()
+                g_ch = face_crop[:, :, 1].astype(np.float64).flatten()
+                r_ch = face_crop[:, :, 2].astype(np.float64).flatten()
+
+                # Correlation between R-G and R-B channels
+                rg_corr = float(np.corrcoef(r_ch, g_ch)[0, 1])
+                rb_corr = float(np.corrcoef(r_ch, b_ch)[0, 1])
+
+                logger.info(f"Spoof Color Corr: RG={rg_corr:.3f}, RB={rb_corr:.3f}")
+
+                # Extremely high correlation in both pairs = screen backlight
+                if rg_corr > 0.985 and rb_corr > 0.985:
+                    spoof_score += 1
+                    spoof_reasons.append(f"Color channels too correlated (RG={rg_corr:.3f}, RB={rb_corr:.3f})")
+            except Exception as e:
+                logger.warning(f"Color correlation check skipped: {e}")
+
+            # ──────────────────────────────────────────────
             #  Final Decision: Vote-based scoring
             # ──────────────────────────────────────────────
             # We use a voting system: if 2 or more independent
             # layers flag the image as suspicious, we reject it.
             # This prevents false positives from any single noisy check,
             # while catching real spoofs that trigger multiple detectors.
-            logger.info(f"Spoof score: {spoof_score}/6 layers flagged. Reasons: {spoof_reasons}")
+            logger.info(f"Spoof score: {spoof_score}/8 layers flagged. Reasons: {spoof_reasons}")
 
             if spoof_score >= 2:
                 reason_text = "; ".join(spoof_reasons[:3])  # show top 3 reasons
@@ -918,12 +971,26 @@ class FaceRecognitionService:
 
             if block_diffs:
                 block_cv = float(np.std(block_diffs)) / (float(np.mean(block_diffs)) + 1e-8)
-                logger.info(f"Video Replay Check: block_cv={block_cv:.3f}")
+                logger.info(f"Video Replay Check: block_cv={block_cv:.3f}, diff_mean={diff_mean:.3f}")
 
-                # Typical real face block_cv is usually > 0.40 due to blinking/breathing/3D parallax.
-                # Video replay on screens results in highly uniform difference (block_cv < 0.25)
-                if block_cv < 0.28:
-                    logger.warning(f"Temporal liveness FAILED: Uniform screen motion detected (block_cv={block_cv:.3f}<0.28)")
+                # Typical real face block_cv is usually > 0.45 due to blinking/breathing/3D parallax.
+                # Video replay on screens results in highly uniform difference (block_cv < 0.35)
+                if block_cv < 0.35:
+                    logger.warning(f"Temporal liveness FAILED: Uniform screen motion detected (block_cv={block_cv:.3f}<0.35)")
+                    return False, (
+                        "Spoofing detected — live face required! "
+                        "Photo, video, or screen playback is not allowed. "
+                        "Please present your real face directly to the camera."
+                    )
+
+                # Borderline detection: if diff_mean is low-ish (4.5-7.0) AND
+                # block_cv is moderately uniform (<0.45), it's likely a video with
+                # slight camera shake but still flat screen movement patterns.
+                if diff_mean < 7.0 and block_cv < 0.45:
+                    logger.warning(
+                        f"Temporal liveness FAILED: Borderline video replay "
+                        f"(diff_mean={diff_mean:.3f}<7.0 AND block_cv={block_cv:.3f}<0.45)"
+                    )
                     return False, (
                         "Spoofing detected — live face required! "
                         "Photo, video, or screen playback is not allowed. "
