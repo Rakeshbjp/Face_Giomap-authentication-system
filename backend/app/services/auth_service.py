@@ -213,10 +213,13 @@ class AuthService:
                             stored_embs = decrypt_embeddings(user["face_embeddings"])
                             if not stored_embs:
                                 continue
-                            # Use the first extracted embedding as the reference
-                            is_match, score = face_service.compare_embeddings(
-                                embeddings[0], stored_embs
-                            )
+                            # Extract embedding from [0] (the front face) and compute similarity
+                            import numpy as np
+                            vec_live = np.array(embeddings[0], dtype=np.float32).reshape(1, -1)
+                            vec_stored = np.array(stored_embs[0], dtype=np.float32).reshape(1, -1)
+                            score = face_service._compute_similarity(vec_live, vec_stored)
+                            
+                            is_match = score >= face_service.threshold
                             if is_match:
                                 existing_email = user.get("email", "unknown")
                                 masked_email = existing_email[:3] + "***" + existing_email[existing_email.index("@"):] if "@" in existing_email else "***"
