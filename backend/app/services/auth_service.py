@@ -197,6 +197,44 @@ class AuthService:
                 # Encrypt embeddings before storage
                 encrypted_embeddings = encrypt_embeddings(embeddings)
                 liveness_verified = True
+
+                # ── Face Duplicate Detection ──
+                # Compare the new face against ALL existing registered faces.
+                # If this face is already registered under another account, block registration.
+                # This prevents the same person from creating multiple accounts.
+                logger.info("Checking for duplicate face registrations...")
+                try:
+                    existing_users = self.users_collection.find(
+                        {"face_embeddings": {"$exists": True, "$ne": []}},
+                        {"_id": 1, "email": 1, "phone": 1, "name": 1, "face_embeddings": 1}
+                    )
+                    async for user in existing_users:
+                        try:
+                            stored_embs = decrypt_embeddings(user["face_embeddings"])
+                            if not stored_embs:
+                                continue
+                            # Use the first extracted embedding as the reference
+                            is_match, score = face_service.compare_embeddings(
+                                embeddings[0], stored_embs
+                            )
+                            if is_match:
+                                existing_email = user.get("email", "unknown")
+                                masked_email = existing_email[:3] + "***" + existing_email[existing_email.index("@"):] if "@" in existing_email else "***"
+                                logger.warning(
+                                    f"Face duplicate detected! New registration face matches "
+                                    f"existing user {user['_id']} ({existing_email}) with score {score:.4f}"
+                                )
+                                return False, (
+                                    f"This face is already registered with another account ({masked_email}). "
+                                    f"Each person can only register once. "
+                                    f"Please login with your existing account instead."
+                                ), None
+                        except Exception as ue:
+                            logger.warning(f"Skipping user {user.get('_id')} during face dup check: {ue}")
+                            continue
+                    logger.info("No duplicate face found — proceeding with registration.")
+                except Exception as dup_err:
+                    logger.warning(f"Face duplicate check skipped due to error: {dup_err}")
             else:
                 logger.info("Registering user without face data (no camera available)")
 
