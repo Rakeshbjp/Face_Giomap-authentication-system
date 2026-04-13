@@ -28,6 +28,7 @@ const RegisterPage = () => {
   const [errors, setErrors] = useState({});
   const [step, setStep] = useState(1); // 1 = form, 2 = face capture, 3 = submitting
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [spoofError, setSpoofError] = useState(null);
 
   /**
    * Handle form field changes.
@@ -118,7 +119,12 @@ const RegisterPage = () => {
           toast.success('Registration successful! Please log in.');
           navigate('/login');
         } else {
-          toast.error(result.message || 'Registration failed');
+          // If spoofing is detected, show the RED overlay on the camera stream
+          if (result.message && result.message.toLowerCase().includes('spoof')) {
+            setSpoofError(result.message);
+          } else {
+            toast.error(result.message || 'Registration failed');
+          }
           setStep(2);
         }
       } catch (err) {
@@ -129,7 +135,12 @@ const RegisterPage = () => {
         }
         const detail = err.response?.data?.detail;
         const errorMsg = Array.isArray(detail) ? detail.map(e => e.msg).join(', ') : detail || 'Registration failed. Please try again.';
-        toast.error(errorMsg);
+        
+        if (typeof errorMsg === 'string' && errorMsg.toLowerCase().includes('spoof')) {
+          setSpoofError(errorMsg);
+        } else {
+          toast.error(errorMsg);
+        }
         setStep(2);
       } finally {
         setIsSubmitting(false);
@@ -365,6 +376,8 @@ const RegisterPage = () => {
               <FaceCaptureRegistration
                 onCaptureComplete={handleFaceCaptureComplete}
                 onCancel={() => setStep(1)}
+                spoofError={spoofError}
+                onDismissSpoof={() => setSpoofError(null)}
               />
               {/* Skip option for users without camera */}
               <div className="mt-4 pt-4 border-t border-gray-200 text-center">

@@ -841,7 +841,7 @@ class FaceRecognitionService:
                 logger.info(f"Spoof Color Corr: RG={rg_corr:.3f}, RB={rb_corr:.3f}")
 
                 # Extremely high correlation in both pairs = screen backlight
-                if rg_corr > 0.985 and rb_corr > 0.985:
+                if rg_corr > 0.97 and rb_corr > 0.97:
                     spoof_score += 1
                     spoof_reasons.append(f"Color channels too correlated (RG={rg_corr:.3f}, RB={rb_corr:.3f})")
             except Exception as e:
@@ -874,13 +874,13 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Final Decision: Vote-based scoring
             # ──────────────────────────────────────────────
-            # We use a voting system: if 2 or more independent
-            # layers flag the image as suspicious, we reject it.
-            # Real faces trigger 0-1 layers; screens/photos/videos
-            # trigger 2-5 layers, so threshold of 2 is the sweet spot.
-            logger.info(f"Spoof score: {spoof_score}/8 layers flagged. Reasons: {spoof_reasons}")
+            # We use a strict single-flag system: if ANY independent
+            # layer flags the image as suspicious, we reject it.
+            # This is essential for preventing high-res laptops/phones
+            # from bypassing authentication.
+            logger.info(f"Spoof score: {spoof_score}/9 layers flagged. Reasons: {spoof_reasons}")
 
-            if spoof_score >= 2:
+            if spoof_score >= 1:
                 reason_text = "; ".join(spoof_reasons[:3])  # show top 3 reasons
                 logger.warning(f"SPOOFING DETECTED (score={spoof_score}): {reason_text}")
                 return False, (

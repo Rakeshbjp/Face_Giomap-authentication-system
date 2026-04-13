@@ -17,7 +17,7 @@ const DIRECTIONS = [
 
 const HOLD_SECONDS = 3;
 
-const FaceCaptureRegistration = ({ onCaptureComplete, onCancel }) => {
+const FaceCaptureRegistration = ({ onCaptureComplete, onCancel, spoofError, onDismissSpoof }) => {
   const { videoRef, isActive, error, startCamera, stopCamera, captureImage } = useCamera({ autoStart: true });
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -232,6 +232,17 @@ const FaceCaptureRegistration = ({ onCaptureComplete, onCancel }) => {
     startCamera();
   }, [startCamera, stopCamera]);
 
+  // When spoofError is set, pause scanning visually.
+  // When user dismisses it, reset the whole process to 0.
+  const handleRetrySpoof = () => {
+    setCurrentStep(0);
+    setCapturedImages([]);
+    setPhase('waiting');
+    setFaceDetected(false);
+    consecutiveRef.current = 0;
+    if (onDismissSpoof) onDismissSpoof();
+  };
+
   // ── Camera error ──
   if (error) {
     return (
@@ -364,8 +375,8 @@ const FaceCaptureRegistration = ({ onCaptureComplete, onCancel }) => {
         )}
 
         {/* Done overlay */}
-        {isDone && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        {isDone && !spoofError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-10">
             <div className="text-center">
               <div className="bg-green-500 rounded-full w-16 h-16 mx-auto mb-3 flex items-center justify-center">
                 <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
@@ -375,6 +386,33 @@ const FaceCaptureRegistration = ({ onCaptureComplete, onCancel }) => {
               <p className="text-white font-semibold text-lg">All captures complete!</p>
               <p className="text-white/70 text-sm">Processing your face data...</p>
             </div>
+          </div>
+        )}
+
+        {/* ── Result popup overlay (Spoofing) ── */}
+        {spoofError && (
+          <div
+            className="absolute inset-0 flex flex-col items-center justify-center bg-red-500/20 backdrop-blur-sm z-50 transition-all duration-300"
+            style={{ animation: 'fadeIn 0.3s ease-out' }}
+          >
+            <div className="popup-icon-fail">
+              <svg className="w-20 h-20 text-red-500 drop-shadow-lg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="mt-3 bg-white/95 px-5 py-3 rounded-xl shadow-lg max-w-xs text-center" style={{ animation: 'slideUp 0.3s ease-out' }}>
+              <p className="text-2xl font-extrabold text-red-600 mb-1">✗ FALSE</p>
+              <p className="text-sm font-medium text-red-700 leading-snug">
+                {spoofError || 'Face is not clearly visible'}
+              </p>
+              <p className="text-xs text-red-400 mt-1">Keep your face still, clearly visible, with no obstructions</p>
+            </div>
+            <button
+              onClick={handleRetrySpoof}
+              className="mt-3 text-sm text-gray-600 bg-white px-4 py-1.5 rounded-lg shadow hover:bg-gray-50 uppercase font-bold tracking-wider"
+            >
+              Tap to retry
+            </button>
           </div>
         )}
       </div>
