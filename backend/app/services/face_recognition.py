@@ -863,22 +863,49 @@ class FaceRecognitionService:
 
             diff = np.abs(face_roi_1 - face_roi_aligned_2)
             diff_mean = float(np.mean(diff))
-            diff_std = float(np.std(diff))
-            diff_max = float(np.max(diff))
 
-            # ── 2. Screen/Photo Detection ──
-            # Because we PERFECTLY aligned the face in 2D space, any remaining difference
-            # comes from lighting, camera noise, and actual 3D depth/parallax.
-            # - Flat photos/screens usually yield diff_mean < 4.0
-            # - Real faces yield diff_mean > 5.0 (often 6.0 - 15.0)
-            logger.info(f"Temporal 2D Affine Alignment: diff_mean={diff_mean:.3f}, diff_std={diff_std:.3f}")
+            # ── 2. 3D Parallax / Screen & Photo Detection ──
+            # The affine transform perfectly aligned the inner face.
+            # If this is a real 3D face moving in front of the camera, the
+            # background and outer elements will have parallax distortion
+            # (they will NOT be perfectly aligned).
+            # If this is a flat 2D printed photo or phone screen, the affine
+            # transform will have perfectly aligned the ENTIRE image, so
+            # the background will have an identically low difference as the face!
+            
+            # Create a wider bounding box to capture background/shoulders
+            bg_cx1 = max(0, fx - int(fw * 0.5))
+            bg_cx2 = min(gray1.shape[1], fx + fw + int(fw * 0.5))
+            bg_cy1 = max(0, fy - int(fh * 0.5))
+            bg_cy2 = min(gray1.shape[0], fy + fh + int(fh * 0.5))
+            
+            bg_roi_1 = gray1[bg_cy1:bg_cy2, bg_cx1:bg_cx2].astype(np.float64)
+            bg_roi_aligned_2 = aligned_gray2[bg_cy1:bg_cy2, bg_cx1:bg_cx2].astype(np.float64)
+            
+            bg_diff = np.abs(bg_roi_1 - bg_roi_aligned_2)
+            bg_diff_mean = float(np.mean(bg_diff)) if bg_diff.size > 0 else diff_mean + 10.0
+            
+            # Ratio of background error to face error
+            parallax_ratio = bg_diff_mean / (diff_mean + 1e-8)
+            
+            logger.info(f"Temporal 3D Parallax: face_diff={diff_mean:.3f}, bg_diff={bg_diff_mean:.3f}, parallax_ratio={parallax_ratio:.2f}")
 
+            # Flat surface checks
             if diff_mean < 4.5:
-                logger.warning(f"Temporal liveness FAILED: Flat 2D surface detected (diff_mean={diff_mean:.3f}<4.5)")
+                logger.warning(f"Temporal liveness FAILED: Perfectly static 2D surface (diff_mean={diff_mean:.3f}<4.5)")
                 return False, (
-                    "Spoofing detected — live face required! "
-                    "Photo, video, or screen playback is not allowed. "
-                    "Please present your real face directly to special camera."
+                    "Spoofing detected — static photo detected! "
+                    "Please present your real face directly to the camera."
+                )
+                
+            # If the user shakes a photo, face_diff > 4.5. BUT parallax_ratio will be very low (~1.0)
+            # because the background aligned perfectly alongside the face.
+            # Real humans moving their head introduce 3D parallax (ratio > 1.35 typically).
+            if parallax_ratio < 1.15 and diff_mean < 12.0:
+                logger.warning(f"Temporal liveness FAILED: Flat 2D Photo/Screen moved in 3D (parallax_ratio={parallax_ratio:.2f}<1.15)")
+                return False, (
+                    "Spoofing detected — flat printed photo or screen playing a video. "
+                    "3D facial depth is required."
                 )
 
             # ── 3. Video Replay / Screen Flicker Detection ──
