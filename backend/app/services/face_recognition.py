@@ -557,14 +557,15 @@ class FaceRecognitionService:
             avg_brightness = float(np.mean(gray))
             is_bright = avg_brightness > 110.0
 
-            # Dynamic Thresholds — strict enough to catch screens/prints
-            # but retaining the lowered Glare checks to permit glasses
-            th_lbp_ent = 5.85 if is_bright else 5.6
-            th_lbp_bins = 130 if is_bright else 110
-            th_hf_mean = 115.0 if is_bright else 135.0
+            # Dynamic Thresholds — Carefully calibrated 
+            # These values block screens/prints but prevent false positives
+            # on real faces that are slightly soft/blurry from webcam filters.
+            th_lbp_ent = 5.75 if is_bright else 5.5
+            th_lbp_bins = 125 if is_bright else 100
+            th_hf_mean = 120.0 if is_bright else 135.0
             th_glare = 0.08 if is_bright else 0.12 # Massive exception for glasses
-            th_grad = 1.05 if is_bright else 0.9
-            th_log = 35.0 if is_bright else 20.0
+            th_grad = 0.95 if is_bright else 0.85
+            th_log = 25.0 if is_bright else 15.0
 
             logger.info(f"Spoofing Analysis: mean_brightness={avg_brightness:.1f}, is_bright={is_bright}")
 
@@ -755,13 +756,13 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Final Decision: Vote-based scoring
             # ──────────────────────────────────────────────
-            # We use a voting system: if 3 or more independent
+            # We use a voting system: if 2 or more independent
             # layers flag the image as suspicious, we reject it.
-            # Real faces (even blurry/glasses) trigger 0-2 layers;
-            # screens/photos/videos trigger 4-6 layers.
+            # Real faces (even blurry/glasses) trigger 0-1 layers;
+            # screens/photos/videos trigger 2-6 layers.
             logger.info(f"Spoof score: {spoof_score}/8 layers flagged. Reasons: {spoof_reasons}")
 
-            if spoof_score >= 3:
+            if spoof_score >= 2:
                 reason_text = "; ".join(spoof_reasons[:3])  # show top 3 reasons
                 logger.warning(f"SPOOFING DETECTED (score={spoof_score}): {reason_text}")
                 return False, (
