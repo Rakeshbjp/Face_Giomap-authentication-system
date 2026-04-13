@@ -557,14 +557,14 @@ class FaceRecognitionService:
             avg_brightness = float(np.mean(gray))
             is_bright = avg_brightness > 110.0
 
-            # Dynamic Thresholds — highly relaxed to support blurry smartphone cameras
-            # and users wearing glasses (which cause glare)
-            th_lbp_ent = 5.7 if is_bright else 5.4
-            th_lbp_bins = 120 if is_bright else 95
-            th_hf_mean = 125.0 if is_bright else 145.0
-            th_glare = 0.08 if is_bright else 0.12 # massively increased for glasses wearers
-            th_grad = 0.9 if is_bright else 0.7
-            th_log = 20.0 if is_bright else 12.0
+            # Dynamic Thresholds — strict enough to catch screens/prints
+            # but retaining the lowered Glare checks to permit glasses
+            th_lbp_ent = 5.85 if is_bright else 5.6
+            th_lbp_bins = 130 if is_bright else 110
+            th_hf_mean = 115.0 if is_bright else 135.0
+            th_glare = 0.08 if is_bright else 0.12 # Massive exception for glasses
+            th_grad = 1.05 if is_bright else 0.9
+            th_log = 35.0 if is_bright else 20.0
 
             logger.info(f"Spoofing Analysis: mean_brightness={avg_brightness:.1f}, is_bright={is_bright}")
 
@@ -610,11 +610,11 @@ class FaceRecognitionService:
                 cr_std = float(np.std(cr_channel))
                 cb_std = float(np.std(cb_channel))
 
-                if cr_std < 4.0 and cb_std < 4.0:
+                if cr_std < 5.0 and cb_std < 5.0:
                     spoof_score += 1
                     spoof_reasons.append(f"Chrominance too flat (Cr_std={cr_std:.1f}, Cb_std={cb_std:.1f})")
 
-                if cr_mean < 115 or cr_mean > 190 or cb_mean < 65 or cb_mean > 145:
+                if cr_mean < 120 or cr_mean > 185 or cb_mean < 70 or cb_mean > 140:
                     spoof_score += 1
                     spoof_reasons.append(f"Chrominance outside skin range (Cr={cr_mean:.0f}, Cb={cb_mean:.0f})")
             except Exception as e:
@@ -645,9 +645,9 @@ class FaceRecognitionService:
                 if high_freq_mean > th_hf_mean:
                     spoof_score += 1
                     spoof_reasons.append(f"High-frequency energy too strong ({high_freq_mean:.1f}>{th_hf_mean})")
-                if peak_ratio > 3.5:
+                if peak_ratio > 3.0:
                     spoof_score += 1
-                    spoof_reasons.append(f"Spectral peak detected (ratio={peak_ratio:.1f}>3.5)")
+                    spoof_reasons.append(f"Spectral peak detected (ratio={peak_ratio:.1f}>3.0)")
             except Exception as e:
                 logger.warning(f"FFT check skipped: {e}")
 
@@ -709,9 +709,9 @@ class FaceRecognitionService:
                     spoof_reasons.append(f"Micro-texture too weak (LoG_var={log_small_var:.1f}<{th_log})")
 
                 global_std = float(np.std(gray))
-                if global_std < 15.0:
+                if global_std < 18.0:
                     spoof_score += 1
-                    spoof_reasons.append(f"Image contrast too flat (std={global_std:.1f}<15)")
+                    spoof_reasons.append(f"Image contrast too flat (std={global_std:.1f}<18)")
             except Exception as e:
                 logger.warning(f"LoG check skipped: {e}")
 
@@ -725,13 +725,13 @@ class FaceRecognitionService:
                 sat_std = float(np.std(sat_channel))
                 sat_cv = sat_std / (sat_mean + 1e-8)
 
-                if sat_cv < 0.18:
+                if sat_cv < 0.22:
                     spoof_score += 1
-                    spoof_reasons.append(f"Saturation too uniform (cv={sat_cv:.2f}<0.18)")
+                    spoof_reasons.append(f"Saturation too uniform (cv={sat_cv:.2f}<0.22)")
 
-                if sat_mean < 8.0:
+                if sat_mean < 12.0:
                     spoof_score += 1
-                    spoof_reasons.append(f"Saturation too low (mean={sat_mean:.1f}<8)")
+                    spoof_reasons.append(f"Saturation too low (mean={sat_mean:.1f}<12)")
             except Exception as e:
                 logger.warning(f"HSV saturation check skipped: {e}")
 
@@ -755,12 +755,12 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Final Decision: Vote-based scoring
             # ──────────────────────────────────────────────
-            # We use a voting system: if 3 or more independent
+            # We use a voting system: if 2 or more independent
             # layers flag the image as suspicious, we reject it.
-            # Real faces (even with glasses or bad lighting) rarely trigger > 2.
+            # Real faces trigger 0-1 layers; screens/photos/videos trigger 2-5
             logger.info(f"Spoof score: {spoof_score}/8 layers flagged. Reasons: {spoof_reasons}")
 
-            if spoof_score >= 3:
+            if spoof_score >= 2:
                 reason_text = "; ".join(spoof_reasons[:3])  # show top 3 reasons
                 logger.warning(f"SPOOFING DETECTED (score={spoof_score}): {reason_text}")
                 return False, (
