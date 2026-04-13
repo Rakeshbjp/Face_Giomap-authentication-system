@@ -51,6 +51,7 @@ class FaceRecognitionService:
         self._eye_cascade = None
         self._init_recognizer()
         self._init_eye_cascade()
+        self._init_mediapipe()
 
     def _init_recognizer(self):
         """Initialize the SFace recognizer model (loaded once)."""
@@ -76,6 +77,25 @@ class FaceRecognitionService:
         except Exception as e:
             logger.error(f"Failed to load eye cascade: {e}")
             self._eye_cascade = None
+
+    def _init_mediapipe(self):
+        """Initialize MediaPipe Face Mesh for Advanced 3D Topology Analysis."""
+        try:
+            import mediapipe as mp
+            self.mp_face_mesh = mp.solutions.face_mesh.FaceMesh(
+                static_image_mode=False,
+                max_num_faces=1,
+                refine_landmarks=True,
+                min_detection_confidence=0.5
+            )
+            self._mp_available = True
+            logger.info("Advanced 3D Face Mesh technology initialized successfully.")
+        except ImportError:
+            logger.warning("MediaPipe not installed. Advanced 3D topology disabled.")
+            self._mp_available = False
+        except Exception as e:
+            logger.error(f"Failed to load MediaPipe: {e}")
+            self._mp_available = False
 
     def _create_detector(self, width: int, height: int):
         """
@@ -557,21 +577,23 @@ class FaceRecognitionService:
             avg_brightness = float(np.mean(gray))
             is_bright = avg_brightness > 110.0
 
-            # Dynamic Thresholds — Carefully calibrated 
-            # These values block screens/prints but prevent false positives
-            # on real faces that are slightly soft/blurry from webcam filters.
-            th_lbp_ent = 5.75 if is_bright else 5.5
-            th_lbp_bins = 125 if is_bright else 100
-            th_hf_mean = 120.0 if is_bright else 135.0
-            th_glare = 0.08 if is_bright else 0.12 # Massive exception for glasses
-            th_grad = 0.95 if is_bright else 0.85
-            th_log = 25.0 if is_bright else 15.0
+            # Dynamic Thresholds — proven balanced values
+            # These are strict enough to catch screens/prints but relaxed
+            # enough to let real live faces pass in varied lighting.
+            th_lbp_ent = 5.85 if is_bright else 5.6
+            th_lbp_bins = 130 if is_bright else 110
+            th_hf_mean = 115.0 if is_bright else 135.0
+            th_glare = 0.02 if is_bright else 0.04
+            th_grad = 1.05 if is_bright else 0.9
+            th_log = 35.0 if is_bright else 20.0
 
             logger.info(f"Spoofing Analysis: mean_brightness={avg_brightness:.1f}, is_bright={is_bright}")
 
             # ──────────────────────────────────────────────
             #  Layer 1: Texture & Detail Analysis (LBP)
             # ──────────────────────────────────────────────
+            # Real faces have complex, non-uniform micro-texture.
+            # Screens lose this due to pixel grids.
             try:
                 lbp_size = min(128, fw_crop, fh_crop)
                 gray_lbp = cv2.resize(gray, (lbp_size, lbp_size))
@@ -583,11 +605,14 @@ class FaceRecognitionService:
                     shifted = np.roll(np.roll(gray_lbp, dy, axis=0), dx, axis=1)
                     lbp_img |= ((shifted >= gray_lbp).astype(np.uint8) << bit)
 
+                # Compute LBP histogram (256 bins)
                 lbp_hist, _ = np.histogram(lbp_img.ravel(), bins=256, range=(0, 256))
                 lbp_hist = lbp_hist.astype(np.float64) / (lbp_hist.sum() + 1e-8)
 
                 lbp_entropy = float(-np.sum(lbp_hist[lbp_hist > 0] * np.log2(lbp_hist[lbp_hist > 0] + 1e-12)))
                 lbp_active_bins = int(np.count_nonzero(lbp_hist))
+
+                logger.info(f"Spoof LBP: entropy={lbp_entropy:.3f}, active_bins={lbp_active_bins}/256")
 
                 if lbp_entropy < th_lbp_ent:
                     spoof_score += 1
@@ -601,6 +626,11 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Layer 2: YCrCb Color Distribution Analysis
             # ──────────────────────────────────────────────
+            # Real human skin occupies a specific narrow band in
+            # YCrCb color space (Cr: ~133-173, Cb: ~77-127).
+            # Screens shift chrominance because they use RGB
+            # sub-pixels that don't perfectly reproduce skin tones.
+            # Prints also shift due to CMYK conversion artifacts.
             try:
                 ycrcb = cv2.cvtColor(face_crop, cv2.COLOR_BGR2YCrCb)
                 cr_channel = ycrcb[:, :, 1].astype(np.float64)
@@ -611,10 +641,16 @@ class FaceRecognitionService:
                 cr_std = float(np.std(cr_channel))
                 cb_std = float(np.std(cb_channel))
 
+                logger.info(f"Spoof YCrCb: Cr_mean={cr_mean:.1f}, Cb_mean={cb_mean:.1f}, "
+                           f"Cr_std={cr_std:.2f}, Cb_std={cb_std:.2f}")
+
+                # Screens have abnormally low chrominance variation
+                # because they emit uniform backlight. Real skin is varied.
                 if cr_std < 5.0 and cb_std < 5.0:
                     spoof_score += 1
                     spoof_reasons.append(f"Chrominance too flat (Cr_std={cr_std:.1f}, Cb_std={cb_std:.1f})")
 
+                # Extreme chrominance shift (outside natural skin range)
                 if cr_mean < 120 or cr_mean > 185 or cb_mean < 70 or cb_mean > 140:
                     spoof_score += 1
                     spoof_reasons.append(f"Chrominance outside skin range (Cr={cr_mean:.0f}, Cb={cb_mean:.0f})")
@@ -624,6 +660,9 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Layer 3: FFT Moiré / Screen Pattern Detection
             # ──────────────────────────────────────────────
+            # Screens have a physical pixel grid that creates
+            # periodic high-frequency Moiré patterns when captured
+            # by another camera. We detect these with FFT.
             try:
                 target_size = 128
                 gray_resized = cv2.resize(gray, (target_size, target_size))
@@ -632,17 +671,25 @@ class FaceRecognitionService:
                 f_shift = np.fft.fftshift(f_transform)
                 magnitude = 20.0 * np.log(np.abs(f_shift) + 1e-8)
 
+                # Mask out low frequencies (center)
                 cy_f, cx_f = target_size // 2, target_size // 2
-                r_mask = 15
+                r_mask = 15  # tighter cutoff to be more aggressive
                 yy, xx = np.ogrid[-cy_f:target_size-cy_f, -cx_f:target_size-cx_f]
                 low_freq_mask = xx*xx + yy*yy <= r_mask*r_mask
 
                 high_mag = magnitude.copy()
                 high_mag[low_freq_mask] = 0
                 high_freq_mean = float(np.mean(high_mag[~low_freq_mask]))
+
+                # Also check for spectral peaks (Moiré creates bright spots)
                 high_freq_max = float(np.max(high_mag[~low_freq_mask]))
+                high_freq_std = float(np.std(high_mag[~low_freq_mask]))
                 peak_ratio = high_freq_max / (high_freq_mean + 1e-8)
 
+                logger.info(f"Spoof FFT: hf_mean={high_freq_mean:.2f}, hf_max={high_freq_max:.2f}, "
+                           f"peak_ratio={peak_ratio:.2f}, hf_std={high_freq_std:.2f}")
+
+                # Aggressive thresholds for screen moiré detection
                 if high_freq_mean > th_hf_mean:
                     spoof_score += 1
                     spoof_reasons.append(f"High-frequency energy too strong ({high_freq_mean:.1f}>{th_hf_mean})")
@@ -655,39 +702,55 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Layer 4: Specular Highlight & Glare Analysis
             # ──────────────────────────────────────────────
+            # Screens emit light, creating large over-exposed patches.
+            # Real skin has tiny, scattered specular highlights (oil).
             try:
+                # Very bright pixels (blown out)
                 _, glare_mask = cv2.threshold(gray, 240, 255, cv2.THRESH_BINARY)
                 glare_ratio = np.count_nonzero(glare_mask) / glare_mask.size
 
+                # Connected components of glare — screens create large blobs,
+                # real skin creates tiny scattered dots
                 num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(glare_mask, connectivity=8)
                 if num_labels > 1:
+                    # Largest glare blob (excluding background label 0)
                     blob_areas = [stats[i, cv2.CC_STAT_AREA] for i in range(1, num_labels)]
                     max_blob = max(blob_areas) if blob_areas else 0
                     max_blob_ratio = max_blob / (glare_mask.size + 1e-8)
                 else:
                     max_blob_ratio = 0
 
+                logger.info(f"Spoof glare: ratio={glare_ratio:.4f}, max_blob_ratio={max_blob_ratio:.4f}")
+
                 if glare_ratio > th_glare:
                     spoof_score += 1
                     spoof_reasons.append(f"Excessive glare ({glare_ratio:.3f}>{th_glare})")
-                if max_blob_ratio > 0.05:  # massive glare (raised from 0.015 for glasses)
+                if max_blob_ratio > 0.015:  # one big glare patch
                     spoof_score += 1
-                    spoof_reasons.append(f"Large glare blob ({max_blob_ratio:.4f}>0.05)")
+                    spoof_reasons.append(f"Large glare blob ({max_blob_ratio:.4f}>0.015)")
             except Exception as e:
                 logger.warning(f"Glare check skipped: {e}")
 
             # ──────────────────────────────────────────────
             #  Layer 5: Gradient Magnitude Uniformity
             # ──────────────────────────────────────────────
+            # Real 3D faces have rich, varied gradient directions
+            # from the curvature of nose, cheeks, chin.
+            # Flat images (screen / print) have more uniform gradients.
             try:
                 sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
                 sobely = cv2.Sobel(gray, cv2.CV_64F, 0, 1, ksize=3)
                 grad_mag = np.sqrt(sobelx**2 + sobely**2)
 
+                # Coefficient of variation of gradient magnitude
                 grad_mean = float(np.mean(grad_mag))
                 grad_std = float(np.std(grad_mag))
                 grad_cv = grad_std / (grad_mean + 1e-8)
 
+                logger.info(f"Spoof gradient: mean={grad_mean:.2f}, std={grad_std:.2f}, cv={grad_cv:.3f}")
+
+                # Real faces typically have cv > 1.2
+                # Screens/prints tend to be more uniform (cv < 0.9)
                 if grad_cv < th_grad:
                     spoof_score += 1
                     spoof_reasons.append(f"Gradient too uniform (cv={grad_cv:.2f}<{th_grad})")
@@ -697,18 +760,32 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Layer 6: Micro-Texture Depth (LoG analysis)
             # ──────────────────────────────────────────────
+            # Real faces have rich micro-texture at multiple scales
+            # due to pores, fine hair, and skin imperfections.
+            # Screens lose this (limited by pixel density).
+            # Prints lose this (limited by printer DPI).
             try:
+                # Laplacian of Gaussian at two scales
                 blur_s = cv2.GaussianBlur(gray, (3, 3), 0)
                 blur_l = cv2.GaussianBlur(gray, (7, 7), 0)
                 log_small = cv2.Laplacian(blur_s, cv2.CV_64F)
                 log_large = cv2.Laplacian(blur_l, cv2.CV_64F)
 
                 log_small_var = float(np.var(log_small))
-                
+                log_large_var = float(np.var(log_large))
+
+                # Ratio: real faces have strong fine detail relative to coarse
+                detail_ratio = log_small_var / (log_large_var + 1e-8)
+
+                logger.info(f"Spoof LoG: small_var={log_small_var:.2f}, large_var={log_large_var:.2f}, "
+                           f"detail_ratio={detail_ratio:.3f}")
+
+                # Very low fine-detail = flat/screen image
                 if log_small_var < th_log:
                     spoof_score += 1
                     spoof_reasons.append(f"Micro-texture too weak (LoG_var={log_small_var:.1f}<{th_log})")
 
+                # Low contrast overall
                 global_std = float(np.std(gray))
                 if global_std < 18.0:
                     spoof_score += 1
@@ -719,6 +796,9 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Layer 7: HSV Saturation Uniformity
             # ──────────────────────────────────────────────
+            # Screens emit uniformly saturated light from their backlight.
+            # Real skin has varied saturation due to blood vessels, oil,
+            # shadows, pores, and 3D curvature.
             try:
                 hsv = cv2.cvtColor(face_crop, cv2.COLOR_BGR2HSV)
                 sat_channel = hsv[:, :, 1].astype(np.float64)
@@ -726,10 +806,16 @@ class FaceRecognitionService:
                 sat_std = float(np.std(sat_channel))
                 sat_cv = sat_std / (sat_mean + 1e-8)
 
+                logger.info(f"Spoof HSV Sat: mean={sat_mean:.1f}, std={sat_std:.2f}, cv={sat_cv:.3f}")
+
+                # Screens typically have very low saturation variation (cv < 0.22)
+                # Real faces have richer saturation variation (cv > 0.30)
+                # Using conservative threshold to avoid blocking real faces
                 if sat_cv < 0.22:
                     spoof_score += 1
                     spoof_reasons.append(f"Saturation too uniform (cv={sat_cv:.2f}<0.22)")
 
+                # Very low saturation = washed out screen light
                 if sat_mean < 12.0:
                     spoof_score += 1
                     spoof_reasons.append(f"Saturation too low (mean={sat_mean:.1f}<12)")
@@ -739,27 +825,59 @@ class FaceRecognitionService:
             # ──────────────────────────────────────────────
             #  Layer 8: Color Channel Correlation
             # ──────────────────────────────────────────────
+            # Screen sub-pixels (RGB) create highly correlated color channels
+            # because the backlight illuminates all channels uniformly.
+            # Real faces under natural/indoor lighting have less correlated
+            # channels due to varying skin pigmentation and ambient color temperature.
             try:
                 b_ch = face_crop[:, :, 0].astype(np.float64).flatten()
                 g_ch = face_crop[:, :, 1].astype(np.float64).flatten()
                 r_ch = face_crop[:, :, 2].astype(np.float64).flatten()
 
+                # Correlation between R-G and R-B channels
                 rg_corr = float(np.corrcoef(r_ch, g_ch)[0, 1])
                 rb_corr = float(np.corrcoef(r_ch, b_ch)[0, 1])
 
-                if rg_corr > 0.992 and rb_corr > 0.992:
+                logger.info(f"Spoof Color Corr: RG={rg_corr:.3f}, RB={rb_corr:.3f}")
+
+                # Extremely high correlation in both pairs = screen backlight
+                if rg_corr > 0.985 and rb_corr > 0.985:
                     spoof_score += 1
                     spoof_reasons.append(f"Color channels too correlated (RG={rg_corr:.3f}, RB={rb_corr:.3f})")
             except Exception as e:
                 logger.warning(f"Color correlation check skipped: {e}")
 
             # ──────────────────────────────────────────────
+            #  Layer 9: Advanced 3D Topological Depth Sensing
+            # ──────────────────────────────────────────────
+            # Advanced deep learning models extrapolate perfect Z-coordinates.
+            # Real 3D heads have large Z-variance (nose is close, ears far).
+            # Photos/videos often resolve to unusually flat topographic maps.
+            try:
+                if getattr(self, '_mp_available', False) and self.mp_face_mesh is not None:
+                    rgb_image = cv2.cvtColor(face_crop, cv2.COLOR_BGR2RGB)
+                    res = self.mp_face_mesh.process(rgb_image)
+                    if res.multi_face_landmarks:
+                        lms = res.multi_face_landmarks[0].landmark
+                        
+                        z_coords = [lm.z for lm in lms]
+                        z_std = float(np.std(z_coords))
+                        
+                        logger.info(f"Spoof 3D Topology: z_std={z_std:.6f}")
+                        
+                        if z_std < 0.012:
+                            spoof_score += 2  # Strong indicator of flat screen
+                            spoof_reasons.append(f"Advanced 3D Depth missing (z_std={z_std:.4f}<0.012)")
+            except Exception as e:
+                logger.warning(f"Advanced 3D topology check skipped: {e}")
+
+            # ──────────────────────────────────────────────
             #  Final Decision: Vote-based scoring
             # ──────────────────────────────────────────────
             # We use a voting system: if 2 or more independent
             # layers flag the image as suspicious, we reject it.
-            # Real faces (even blurry/glasses) trigger 0-1 layers;
-            # screens/photos/videos trigger 2-6 layers.
+            # Real faces trigger 0-1 layers; screens/photos/videos
+            # trigger 2-5 layers, so threshold of 2 is the sweet spot.
             logger.info(f"Spoof score: {spoof_score}/8 layers flagged. Reasons: {spoof_reasons}")
 
             if spoof_score >= 2:
@@ -863,49 +981,22 @@ class FaceRecognitionService:
 
             diff = np.abs(face_roi_1 - face_roi_aligned_2)
             diff_mean = float(np.mean(diff))
+            diff_std = float(np.std(diff))
+            diff_max = float(np.max(diff))
 
-            # ── 2. 3D Parallax / Screen & Photo Detection ──
-            # The affine transform perfectly aligned the inner face.
-            # If this is a real 3D face moving in front of the camera, the
-            # background and outer elements will have parallax distortion
-            # (they will NOT be perfectly aligned).
-            # If this is a flat 2D printed photo or phone screen, the affine
-            # transform will have perfectly aligned the ENTIRE image, so
-            # the background will have an identically low difference as the face!
-            
-            # Create a wider bounding box to capture background/shoulders
-            bg_cx1 = max(0, fx - int(fw * 0.5))
-            bg_cx2 = min(gray1.shape[1], fx + fw + int(fw * 0.5))
-            bg_cy1 = max(0, fy - int(fh * 0.5))
-            bg_cy2 = min(gray1.shape[0], fy + fh + int(fh * 0.5))
-            
-            bg_roi_1 = gray1[bg_cy1:bg_cy2, bg_cx1:bg_cx2].astype(np.float64)
-            bg_roi_aligned_2 = aligned_gray2[bg_cy1:bg_cy2, bg_cx1:bg_cx2].astype(np.float64)
-            
-            bg_diff = np.abs(bg_roi_1 - bg_roi_aligned_2)
-            bg_diff_mean = float(np.mean(bg_diff)) if bg_diff.size > 0 else diff_mean + 10.0
-            
-            # Ratio of background error to face error
-            parallax_ratio = bg_diff_mean / (diff_mean + 1e-8)
-            
-            logger.info(f"Temporal 3D Parallax: face_diff={diff_mean:.3f}, bg_diff={bg_diff_mean:.3f}, parallax_ratio={parallax_ratio:.2f}")
+            # ── 2. Screen/Photo Detection ──
+            # Because we PERFECTLY aligned the face in 2D space, any remaining difference
+            # comes from lighting, camera noise, and actual 3D depth/parallax.
+            # - Flat photos/screens usually yield diff_mean < 4.0
+            # - Real faces yield diff_mean > 5.0 (often 6.0 - 15.0)
+            logger.info(f"Temporal 2D Affine Alignment: diff_mean={diff_mean:.3f}, diff_std={diff_std:.3f}")
 
-            # Flat surface checks
             if diff_mean < 4.5:
-                logger.warning(f"Temporal liveness FAILED: Perfectly static 2D surface (diff_mean={diff_mean:.3f}<4.5)")
+                logger.warning(f"Temporal liveness FAILED: Flat 2D surface detected (diff_mean={diff_mean:.3f}<4.5)")
                 return False, (
-                    "Spoofing detected — static photo detected! "
-                    "Please present your real face directly to the camera."
-                )
-                
-            # If the user shakes a photo, face_diff > 4.5. BUT parallax_ratio will be very low (~1.0)
-            # because the background aligned perfectly alongside the face.
-            # Real humans moving their head introduce 3D parallax (ratio > 1.35 typically).
-            if parallax_ratio < 1.15 and diff_mean < 12.0:
-                logger.warning(f"Temporal liveness FAILED: Flat 2D Photo/Screen moved in 3D (parallax_ratio={parallax_ratio:.2f}<1.15)")
-                return False, (
-                    "Spoofing detected — flat printed photo or screen playing a video. "
-                    "3D facial depth is required."
+                    "Spoofing detected — live face required! "
+                    "Photo, video, or screen playback is not allowed. "
+                    "Please present your real face directly to special camera."
                 )
 
             # ── 3. Video Replay / Screen Flicker Detection ──
@@ -943,6 +1034,53 @@ class FaceRecognitionService:
             # or it's a completely different frame (e.g. video cut)
             if diff_mean > 35.0:
                  return False, "Too much movement detected. Please hold your head steady."
+
+            # ── 4. Advanced 3D Temporal Topology (MediaPipe Face Mesh) ──
+            if getattr(self, '_mp_available', False) and self.mp_face_mesh is not None:
+                try:
+                    rgb1 = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+                    rgb2 = cv2.cvtColor(img2, cv2.COLOR_BGR2RGB)
+                    
+                    res1 = self.mp_face_mesh.process(rgb1)
+                    res2 = self.mp_face_mesh.process(rgb2)
+                    
+                    if res1.multi_face_landmarks and res2.multi_face_landmarks:
+                        lms1 = res1.multi_face_landmarks[0].landmark
+                        lms2 = res2.multi_face_landmarks[0].landmark
+                        
+                        # 1. 3D Deformation (Z-coordinate variance across time)
+                        # A real face naturally deforms in 3D (microsaccades, breathing, minor head twist).
+                        # A photo/screen moving in 2D space has IDENTICAL inferred rigid 3D topology.
+                        z_diffs = [abs(pt1.z - pt2.z) for pt1, pt2 in zip(lms1, lms2)]
+                        z_diff_mean = float(np.mean(z_diffs))
+                        
+                        # 2. Eye Aspect Ratio (EAR) for blinking & eyelid movement
+                        def get_ear(lms, indices):
+                            import numpy as np
+                            v1 = np.linalg.norm(np.array([lms[indices[1]].x, lms[indices[1]].y]) - np.array([lms[indices[5]].x, lms[indices[5]].y]))
+                            v2 = np.linalg.norm(np.array([lms[indices[2]].x, lms[indices[2]].y]) - np.array([lms[indices[4]].x, lms[indices[4]].y]))
+                            h = np.linalg.norm(np.array([lms[indices[0]].x, lms[indices[0]].y]) - np.array([lms[indices[3]].x, lms[indices[3]].y]))
+                            return (v1 + v2) / (2.0 * h + 1e-6)
+                            
+                        LEFT_EYE = [33, 160, 158, 133, 153, 144]
+                        RIGHT_EYE = [362, 385, 387, 263, 373, 380]
+                        
+                        ear1 = (get_ear(lms1, LEFT_EYE) + get_ear(lms1, RIGHT_EYE)) / 2.0
+                        ear2 = (get_ear(lms2, LEFT_EYE) + get_ear(lms2, RIGHT_EYE)) / 2.0
+                        ear_diff = abs(ear1 - ear2)
+                        
+                        logger.info(f"Advanced 3D Temporal: z_diff_mean={z_diff_mean:.6f}, ear_diff={ear_diff:.6f}")
+                        
+                        # Screens and photos have rigidly consistent Z-depth and no micro-expressions (ear_diff ~0)
+                        if z_diff_mean < 0.0008 and ear_diff < 0.002:
+                            logger.warning(f"Temporal liveness FAILED: Rigid 3D topology (z_diff={z_diff_mean:.6f}, ear_diff={ear_diff:.6f})")
+                            return False, (
+                                "Advanced 3D Anti-Spoofing triggered! "
+                                "Rigid 2D surface detected (photo tracking). "
+                                "Please use a real, live face."
+                            )
+                except Exception as e:
+                    logger.error(f"Advanced 3D temporal check failed: {e}")
 
             logger.info("Temporal liveness PASSED")
             return True, "OK"

@@ -160,28 +160,22 @@ class AuthService:
             Tuple of (success, message, user_id or None).
         """
         try:
+            # Check for existing user
+            existing = await self.users_collection.find_one(
+                {"$or": [{"email": email}, {"phone": phone}]}
+            )
+            if existing:
+                if existing.get("email") == email:
+
+                    return False, "Email already registered", None
+                return False, "Phone number already registered", None
+
             # Hash password
             password_hash = self.hash_password(password)
 
             encrypted_embeddings = []
             liveness_verified = False
             has_face_data = len(face_images) >= 4
-            
-            # Keep track of duplicate flags
-            dup_email = False
-            dup_phone = False
-            dup_face = False
-            existing_account_email = ""
-
-            # Check for existing user by email/phone first
-            existing = await self.users_collection.find_one(
-                {"$or": [{"email": email}, {"phone": phone}]}
-            )
-            if existing:
-                if existing.get("email") == email:
-                    dup_email = True
-                if existing.get("phone") == phone:
-                    dup_phone = True
 
             if has_face_data:
                 # Perform liveness detection
@@ -205,6 +199,9 @@ class AuthService:
                 liveness_verified = True
 
                 # ── Face Duplicate Detection ──
+                # Compare the new face against ALL existing registered faces.
+                # If this face is already registered under another account, block registration.
+                # This prevents the same person from creating multiple accounts.
                 logger.info("Checking for duplicate face registrations...")
                 try:
                     existing_users = self.users_collection.find(
@@ -216,50 +213,33 @@ class AuthService:
                             stored_embs = decrypt_embeddings(user["face_embeddings"])
                             if not stored_embs:
                                 continue
+                            # Extract embedding from [0] (the front face) and compute similarity
                             import numpy as np
+                            vec_live = np.array(embeddings[0], dtype=np.float32).reshape(1, -1)
+                            vec_stored = np.array(stored_embs[0], dtype=np.float32).reshape(1, -1)
+                            score = face_service._compute_similarity(vec_live, vec_stored)
                             
-                            best_score = 0.0
-                            for l_emb in embeddings:
-                                vec_live = np.array(l_emb, dtype=np.float32).reshape(1, -1)
-                                for s_emb in stored_embs:
-                                    vec_stored = np.array(s_emb, dtype=np.float32).reshape(1, -1)
-                                    score = face_service._compute_similarity(vec_live, vec_stored)
-                                    if score > best_score:
-                                        best_score = score
-                                        
-                            is_match = best_score >= face_service.threshold
+                            is_match = score >= face_service.threshold
                             if is_match:
-                                dup_face = True
-                                e_mail = user.get("email", "unknown")
-                                existing_account_email = e_mail[:3] + "***" + e_mail[e_mail.index("@"):] if "@" in e_mail else "***"
-                                break # Stop checking once we find a duplicating face
+                                existing_email = user.get("email", "unknown")
+                                masked_email = existing_email[:3] + "***" + existing_email[existing_email.index("@"):] if "@" in existing_email else "***"
+                                logger.warning(
+                                    f"Face duplicate detected! New registration face matches "
+                                    f"existing user {user['_id']} ({existing_email}) with score {score:.4f}"
+                                )
+                                return False, (
+                                    f"This face is already registered with another account ({masked_email}). "
+                                    f"Each person can only register once. "
+                                    f"Please login with your existing account instead."
+                                ), None
                         except Exception as ue:
                             logger.warning(f"Skipping user {user.get('_id')} during face dup check: {ue}")
                             continue
+                    logger.info("No duplicate face found — proceeding with registration.")
                 except Exception as dup_err:
                     logger.warning(f"Face duplicate check skipped due to error: {dup_err}")
             else:
                 logger.info("Registering user without face data (no camera available)")
-                
-            # If any duplicates were found, build a unified error message
-            if dup_email or dup_phone or dup_face:
-                errors_found = []
-                if dup_email: errors_found.append("email")
-                if dup_phone: errors_found.append("phone number")
-                if dup_face: errors_found.append("face")
-                
-                # Format: "Email, phone number, and face are already registered"
-                if len(errors_found) == 3:
-                    dup_str = "Email, phone number, and face are"
-                elif len(errors_found) == 2:
-                    dup_str = f"{errors_found[0].capitalize()} and {errors_found[1]} are"
-                else:
-                    dup_str = f"{errors_found[0].capitalize()} is"
-                    
-                msg = f"{dup_str} already registered."
-                if dup_face:
-                    msg += f" Each person can only register once (matches account {existing_account_email})."
-                return False, msg, None
 
             # Reverse-geocode the registered location
             registered_address = None
