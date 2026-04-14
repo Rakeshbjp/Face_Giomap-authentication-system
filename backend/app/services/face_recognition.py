@@ -841,7 +841,7 @@ class FaceRecognitionService:
                 logger.info(f"Spoof Color Corr: RG={rg_corr:.3f}, RB={rb_corr:.3f}")
 
                 # Extremely high correlation in both pairs = screen backlight
-                if rg_corr > 0.97 and rb_corr > 0.97:
+                if rg_corr > 0.985 and rb_corr > 0.985:
                     spoof_score += 1
                     spoof_reasons.append(f"Color channels too correlated (RG={rg_corr:.3f}, RB={rb_corr:.3f})")
             except Exception as e:
@@ -865,22 +865,22 @@ class FaceRecognitionService:
                         
                         logger.info(f"Spoof 3D Topology: z_std={z_std:.6f}")
                         
-                        if z_std < 0.012:
+                        if z_std < 0.008:
                             spoof_score += 2  # Strong indicator of flat screen
-                            spoof_reasons.append(f"Advanced 3D Depth missing (z_std={z_std:.4f}<0.012)")
+                            spoof_reasons.append(f"Advanced 3D Depth missing (z_std={z_std:.4f}<0.008)")
             except Exception as e:
                 logger.warning(f"Advanced 3D topology check skipped: {e}")
 
             # ──────────────────────────────────────────────
             #  Final Decision: Vote-based scoring
             # ──────────────────────────────────────────────
-            # We use a strict single-flag system: if ANY independent
-            # layer flags the image as suspicious, we reject it.
-            # This is essential for preventing high-res laptops/phones
-            # from bypassing authentication.
+            # We use a voting system: if 2 or more independent
+            # layers flag the image as suspicious, we reject it.
+            # Real faces trigger 0-1 layers occasionally due to lighting,
+            # so threshold of 2 ensures real faces pass smoothly.
             logger.info(f"Spoof score: {spoof_score}/9 layers flagged. Reasons: {spoof_reasons}")
 
-            if spoof_score >= 1:
+            if spoof_score >= 2:
                 reason_text = "; ".join(spoof_reasons[:3])  # show top 3 reasons
                 logger.warning(f"SPOOFING DETECTED (score={spoof_score}): {reason_text}")
                 return False, (
