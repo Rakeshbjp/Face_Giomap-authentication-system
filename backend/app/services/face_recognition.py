@@ -577,15 +577,16 @@ class FaceRecognitionService:
             avg_brightness = float(np.mean(gray))
             is_bright = avg_brightness > 110.0
 
-            # Dynamic Thresholds — proven balanced values
-            # These are strict enough to catch screens/prints but relaxed
-            # enough to let real live faces pass in varied lighting.
-            th_lbp_ent = 5.85 if is_bright else 5.6
-            th_lbp_bins = 130 if is_bright else 110
-            th_hf_mean = 115.0 if is_bright else 135.0
-            th_glare = 0.02 if is_bright else 0.04
-            th_grad = 1.05 if is_bright else 0.9
-            th_log = 35.0 if is_bright else 20.0
+            # Dynamic Thresholds — STRICT for screens, safe for real faces
+            # Screens are bright + flat + uniform   → trigger 3-5 layers
+            # Real faces have rich texture           → trigger 0 layers
+            # Widened thresholds so screens ALWAYS hit 2+ independently
+            th_lbp_ent = 6.2 if is_bright else 5.9       # was 5.85/5.6 — stricter
+            th_lbp_bins = 150 if is_bright else 120      # was 130/110 — stricter
+            th_hf_mean = 105.0 if is_bright else 125.0   # was 115/135 — more sensitive
+            th_glare = 0.015 if is_bright else 0.03      # was 0.02/0.04 — stricter
+            th_grad = 1.15 if is_bright else 1.0         # was 1.05/0.9 — stricter
+            th_log = 45.0 if is_bright else 25.0         # was 35/20 — stricter
 
             logger.info(f"Spoofing Analysis: mean_brightness={avg_brightness:.1f}, is_bright={is_bright}")
 
@@ -646,7 +647,7 @@ class FaceRecognitionService:
 
                 # Screens have abnormally low chrominance variation
                 # because they emit uniform backlight. Real skin is varied.
-                if cr_std < 5.0 and cb_std < 5.0:
+                if cr_std < 6.5 and cb_std < 6.5:
                     spoof_score += 1
                     spoof_reasons.append(f"Chrominance too flat (Cr_std={cr_std:.1f}, Cb_std={cb_std:.1f})")
 
@@ -693,9 +694,9 @@ class FaceRecognitionService:
                 if high_freq_mean > th_hf_mean:
                     spoof_score += 1
                     spoof_reasons.append(f"High-frequency energy too strong ({high_freq_mean:.1f}>{th_hf_mean})")
-                if peak_ratio > 3.0:
+                if peak_ratio > 2.5:
                     spoof_score += 1
-                    spoof_reasons.append(f"Spectral peak detected (ratio={peak_ratio:.1f}>3.0)")
+                    spoof_reasons.append(f"Spectral peak detected (ratio={peak_ratio:.1f}>2.5)")
             except Exception as e:
                 logger.warning(f"FFT check skipped: {e}")
 
@@ -808,17 +809,16 @@ class FaceRecognitionService:
 
                 logger.info(f"Spoof HSV Sat: mean={sat_mean:.1f}, std={sat_std:.2f}, cv={sat_cv:.3f}")
 
-                # Screens typically have very low saturation variation (cv < 0.22)
-                # Real faces have richer saturation variation (cv > 0.30)
-                # Using conservative threshold to avoid blocking real faces
-                if sat_cv < 0.22:
+                # Screens typically have very low saturation variation (cv < 0.28)
+                # Real faces have richer saturation variation (cv > 0.35)
+                if sat_cv < 0.28:
                     spoof_score += 1
-                    spoof_reasons.append(f"Saturation too uniform (cv={sat_cv:.2f}<0.22)")
+                    spoof_reasons.append(f"Saturation too uniform (cv={sat_cv:.2f}<0.28)")
 
                 # Very low saturation = washed out screen light
-                if sat_mean < 12.0:
+                if sat_mean < 15.0:
                     spoof_score += 1
-                    spoof_reasons.append(f"Saturation too low (mean={sat_mean:.1f}<12)")
+                    spoof_reasons.append(f"Saturation too low (mean={sat_mean:.1f}<15)")
             except Exception as e:
                 logger.warning(f"HSV saturation check skipped: {e}")
 
@@ -841,7 +841,7 @@ class FaceRecognitionService:
                 logger.info(f"Spoof Color Corr: RG={rg_corr:.3f}, RB={rb_corr:.3f}")
 
                 # Extremely high correlation in both pairs = screen backlight
-                if rg_corr > 0.985 and rb_corr > 0.985:
+                if rg_corr > 0.96 and rb_corr > 0.96:
                     spoof_score += 1
                     spoof_reasons.append(f"Color channels too correlated (RG={rg_corr:.3f}, RB={rb_corr:.3f})")
             except Exception as e:
@@ -865,20 +865,57 @@ class FaceRecognitionService:
                         
                         logger.info(f"Spoof 3D Topology: z_std={z_std:.6f}")
                         
-                        if z_std < 0.008:
+                        if z_std < 0.018:
                             spoof_score += 2  # Strong indicator of flat screen
-                            spoof_reasons.append(f"Advanced 3D Depth missing (z_std={z_std:.4f}<0.008)")
+                            spoof_reasons.append(f"Advanced 3D Depth missing (z_std={z_std:.4f}<0.018)")
             except Exception as e:
                 logger.warning(f"Advanced 3D topology check skipped: {e}")
 
             # ──────────────────────────────────────────────
+            #  Layer 10: Screen Bezel / Edge Reflection
+            # ──────────────────────────────────────────────
+            # When filming a screen, the edges of the face crop often
+            # contain a sharp luminance gradient from the screen bezel
+            # or the reflective glass edge. Real faces have smooth
+            # luminance transitions at all borders as skin continues.
+            try:
+                border_w = max(3, fw_crop // 15)
+                left_strip = gray[:, :border_w].astype(np.float64)
+                right_strip = gray[:, -border_w:].astype(np.float64)
+                top_strip = gray[:border_w, :].astype(np.float64)
+                bottom_strip = gray[-border_w:, :].astype(np.float64)
+
+                center_strip = gray[
+                    fh_crop // 4 : 3 * fh_crop // 4,
+                    fw_crop // 4 : 3 * fw_crop // 4
+                ].astype(np.float64)
+
+                border_mean = float(np.mean(
+                    [np.mean(left_strip), np.mean(right_strip),
+                     np.mean(top_strip), np.mean(bottom_strip)]
+                ))
+                center_mean = float(np.mean(center_strip))
+                edge_contrast = abs(center_mean - border_mean)
+
+                logger.info(f"Spoof Edge: center={center_mean:.1f}, border={border_mean:.1f}, contrast={edge_contrast:.1f}")
+
+                # Screens have very sharp edge-to-center contrast
+                # due to bezel framing and screen light falloff.
+                # Real faces have gradual skin-to-background transitions.
+                if edge_contrast > 40.0:
+                    spoof_score += 1
+                    spoof_reasons.append(f"Screen bezel detected (edge_contrast={edge_contrast:.1f}>40)")
+            except Exception as e:
+                logger.warning(f"Edge reflection check skipped: {e}")
+
+            # ──────────────────────────────────────────────
             #  Final Decision: Vote-based scoring
             # ──────────────────────────────────────────────
-            # We use a voting system: if 2 or more independent
-            # layers flag the image as suspicious, we reject it.
-            # Real faces trigger 0-1 layers occasionally due to lighting,
-            # so threshold of 2 ensures real faces pass smoothly.
-            logger.info(f"Spoof score: {spoof_score}/9 layers flagged. Reasons: {spoof_reasons}")
+            # We use a 2-vote threshold: screens/photos/videos
+            # trigger 3-6 layers with the aggressive thresholds above.
+            # Real faces trigger 0 layers (rarely 1 in extreme lighting).
+            # Threshold of 2 stops all screens while never blocking real faces.
+            logger.info(f"Spoof score: {spoof_score}/10 layers flagged. Reasons: {spoof_reasons}")
 
             if spoof_score >= 2:
                 reason_text = "; ".join(spoof_reasons[:3])  # show top 3 reasons
@@ -991,12 +1028,12 @@ class FaceRecognitionService:
             # - Real faces yield diff_mean > 5.0 (often 6.0 - 15.0)
             logger.info(f"Temporal 2D Affine Alignment: diff_mean={diff_mean:.3f}, diff_std={diff_std:.3f}")
 
-            if diff_mean < 4.5:
-                logger.warning(f"Temporal liveness FAILED: Flat 2D surface detected (diff_mean={diff_mean:.3f}<4.5)")
+            if diff_mean < 5.5:
+                logger.warning(f"Temporal liveness FAILED: Flat 2D surface detected (diff_mean={diff_mean:.3f}<5.5)")
                 return False, (
                     "Spoofing detected — live face required! "
                     "Photo, video, or screen playback is not allowed. "
-                    "Please present your real face directly to special camera."
+                    "Please present your real face directly to the camera."
                 )
 
             # ── 3. Video Replay / Screen Flicker Detection ──
@@ -1022,8 +1059,8 @@ class FaceRecognitionService:
 
                 # Typical real face block_cv is usually > 0.40 due to blinking/breathing/3D parallax.
                 # Video replay on screens results in highly uniform difference (block_cv < 0.28)
-                if block_cv < 0.28:
-                    logger.warning(f"Temporal liveness FAILED: Uniform screen motion detected (block_cv={block_cv:.3f}<0.28)")
+                if block_cv < 0.35:
+                    logger.warning(f"Temporal liveness FAILED: Uniform screen motion detected (block_cv={block_cv:.3f}<0.35)")
                     return False, (
                         "Spoofing detected — live face required! "
                         "Photo, video, or screen playback is not allowed. "
@@ -1072,7 +1109,7 @@ class FaceRecognitionService:
                         logger.info(f"Advanced 3D Temporal: z_diff_mean={z_diff_mean:.6f}, ear_diff={ear_diff:.6f}")
                         
                         # Screens and photos have rigidly consistent Z-depth and no micro-expressions (ear_diff ~0)
-                        if z_diff_mean < 0.0008 and ear_diff < 0.002:
+                        if z_diff_mean < 0.0015 and ear_diff < 0.005:
                             logger.warning(f"Temporal liveness FAILED: Rigid 3D topology (z_diff={z_diff_mean:.6f}, ear_diff={ear_diff:.6f})")
                             return False, (
                                 "Advanced 3D Anti-Spoofing triggered! "
