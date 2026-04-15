@@ -1316,11 +1316,19 @@ class FaceRecognitionService:
                         return False, f"Too many images without a face ({skipped} of {len(base64_images)})"
                     continue
 
-                # ── Anti-spoofing on EVERY registration frame ──
-                spoof_ok, spoof_msg = self._detect_spoofing(image, face)
-                if not spoof_ok:
-                    logger.warning(f"Anti-spoofing failed on registration image {i + 1}: {spoof_msg}")
-                    return False, f"Registration rejected: {spoof_msg}"
+                # ── Anti-spoofing on FRONT-FACING frame only ──
+                # Only run the full 10-layer anti-spoofing engine on frame 0 (front face).
+                # Side-angle frames (left, right, tilt) have naturally different texture,
+                # gradient, and lighting properties that cause false positives.
+                # Registration is still protected against screens/photos for side frames via:
+                #   - Positional variance check (photos don't move)
+                #   - Face size variation (flat screens stay constant)
+                #   - Embedding consistency (all frames must be same person)
+                if i == 0:
+                    spoof_ok, spoof_msg = self._detect_spoofing(image, face)
+                    if not spoof_ok:
+                        logger.warning(f"Anti-spoofing failed on registration front image: {spoof_msg}")
+                        return False, f"Registration rejected: {spoof_msg}"
 
                 # face is [x, y, w, h, ...landmarks..., confidence]
                 x, y, w, h = face[0], face[1], face[2], face[3]
