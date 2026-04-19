@@ -93,7 +93,8 @@ const LogoutKioskPage = () => {
     
     setIsLoading(true);
     try {
-      const res = await kioskLogoutEmployee(employee.employee_id);
+      const durationMins = Math.floor(calcResult.diffMs / (1000 * 60));
+      const res = await kioskLogoutEmployee(employee.employee_id, loginTimeInput, durationMins);
       if (res.status) {
         toast.success(`Goodbye ${employee.name}! You have been logged out.`);
         // Reset kiosk

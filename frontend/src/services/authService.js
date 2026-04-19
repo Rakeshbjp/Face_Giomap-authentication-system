@@ -169,7 +169,11 @@ export const kioskGetEmployee = async (employee_id) => {
   return response.data;
 };
 
-export const kioskLogoutEmployee = async (employee_id) => {
-  const response = await api.post('/auth/kiosk/logout', { employee_id });
+export const kioskLogoutEmployee = async (employee_id, login_time, duration_minutes) => {
+  const response = await api.post('/auth/kiosk/logout', { 
+    employee_id, 
+    login_time, 
+    duration_minutes 
+  });
   return response.data;
 };

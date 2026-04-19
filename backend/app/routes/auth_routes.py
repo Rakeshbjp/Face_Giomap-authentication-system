@@ -27,6 +27,8 @@ from app.models.user import (
 
 class KioskLogoutRequest(BaseModel):
     employee_id: str
+    login_time: str
+    duration_minutes: float
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user, security
 
@@ -489,6 +491,19 @@ async def kiosk_logout_employee(request: KioskLogoutRequest, db=Depends(get_data
     if not user:
         return StandardResponse(status=False, message="Employee ID not found")
         
+    # Create a detailed attendance/logout record
+    attendance_record = {
+        "employee_id": request.employee_id,
+        "name": user.get("name"),
+        "login_time_entered": request.login_time,
+        "logout_time": datetime.utcnow(),
+        "duration_minutes": request.duration_minutes,
+        "target_hours": user.get("hours_per_day", 8),
+        "type": "kiosk_checkout",
+        "created_at": datetime.utcnow()
+    }
+    await db.attendance.insert_one(attendance_record)
+
     await db.users.update_one(
         {"employee_id": request.employee_id},
         {"$set": {"last_logout_at": datetime.utcnow()}}
