@@ -12,6 +12,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import LocationPage from './pages/LocationPage';
+import LogoutKioskPage from './pages/LogoutKioskPage';
 import Spinner from './components/ui/Spinner';
 
 /**
@@ -98,6 +99,7 @@ const AppRoutes = () => {
             </ProtectedRoute>
           }
         />
+        <Route path="/logout-kiosk" element={<LogoutKioskPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

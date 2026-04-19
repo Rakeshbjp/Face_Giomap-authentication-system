@@ -67,6 +67,12 @@ const Navbar = () => {
                 <Link to="/register" className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors">
                   Register
                 </Link>
+                <Link to="/logout-kiosk" className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-red-600 border border-red-200 rounded-lg transition-colors flex items-center gap-1">
+                  <svg className="w-4 h-4 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Logout Kiosk
+                </Link>
               </>
             )}
           </div>
@@ -135,6 +141,16 @@ const Navbar = () => {
                   className="block px-3 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors text-center"
                 >
                   Register
+                </Link>
+                <Link
+                  to="/logout-kiosk"
+                  onClick={closeMobile}
+                  className="block px-3 py-2.5 mt-2 text-sm font-medium text-red-600 bg-red-50 border border-red-100 hover:bg-red-100 rounded-lg transition-colors text-center flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  Office Logout Kiosk
                 </Link>
               </>
             )}

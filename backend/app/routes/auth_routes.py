@@ -24,6 +24,9 @@ from app.models.user import (
     CheckUserRequest,
     CompanySettings,
 )
+
+class KioskLogoutRequest(BaseModel):
+    employee_id: str
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user, security
 
@@ -440,7 +443,7 @@ async def health_check():
 
 
 # ──────────────────────────────────────────────
-#  POST /api/auth/logout
+#  Logout / Auth Status (Protected)
 # ──────────────────────────────────────────────
 
 @router.post("/logout", response_model=StandardResponse)
@@ -457,6 +460,40 @@ async def logout_user(
 
     logger.info(f"User logged out: {user_id}")
     return StandardResponse(status=True, message="Logged out successfully")
+
+
+# ──────────────────────────────────────────────
+#  Logout Kiosk API (Public/Tablet usage)
+# ──────────────────────────────────────────────
+
+@router.get("/kiosk/{employee_id}", response_model=StandardResponse)
+async def kiosk_get_employee(employee_id: str, db=Depends(get_database)):
+    """Fetch employee info publicly for the Logout Kiosk."""
+    user = await db.users.find_one({"employee_id": employee_id})
+    if not user:
+        # Prevent leaking email/phone if user tries searching, only match exact employee ID
+        return StandardResponse(status=False, message="Employee ID not found")
+        
+    return StandardResponse(status=True, message="Found", data={
+        "name": user.get("name"),
+        "designation": user.get("designation"),
+        "employee_id": user.get("employee_id"),
+        "hours_per_day": user.get("hours_per_day", 8),
+        "last_login_at": user.get("last_login_at"),
+    })
+
+@router.post("/kiosk/logout", response_model=StandardResponse)
+async def kiosk_logout_employee(request: KioskLogoutRequest, db=Depends(get_database)):
+    """Process logout from Kiosk."""
+    user = await db.users.find_one({"employee_id": request.employee_id})
+    if not user:
+        return StandardResponse(status=False, message="Employee ID not found")
+        
+    await db.users.update_one(
+        {"employee_id": request.employee_id},
+        {"$set": {"last_logout_at": datetime.utcnow()}}
+    )
+    return StandardResponse(status=True, message="Successfully logged out of the system")
 
 
 # ──────────────────────────────────────────────

@@ -163,3 +163,13 @@ export const updateCompanySettings = async (hours_per_day, weekly_off) => {
     throw new Error(err.response?.data?.message || 'Failed to update company settings');
   }
 };
+
+export const kioskGetEmployee = async (employee_id) => {
+  const response = await api.get(`/auth/kiosk/${employee_id}`);
+  return response.data;
+};
+
+export const kioskLogoutEmployee = async (employee_id) => {
+  const response = await api.post('/auth/kiosk/logout', { employee_id });
+  return response.data;
+};
