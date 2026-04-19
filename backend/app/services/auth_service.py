@@ -66,8 +66,9 @@ class AuthService:
             if user:
                 return str(user["_id"])
 
-        # Otherwise, try to find the user by email
-        user = await self.users_collection.find_one({"email": identifier.strip().lower()}, {"_id": 1})
+        # Otherwise, try to find the user by email (case-insensitive)
+        email_regex = {"$regex": f"^{identifier.strip()}$", "$options": "i"}
+        user = await self.users_collection.find_one({"email": email_regex}, {"_id": 1})
         if user:
             return str(user["_id"])
 
@@ -160,12 +161,14 @@ class AuthService:
             Tuple of (success, message, user_id or None).
         """
         try:
-            # Check for existing user
+            # Case-insensitive check for existing user
+            email_regex = {"$regex": f"^{email.strip()}$", "$options": "i"}
             existing = await self.users_collection.find_one(
-                {"$or": [{"email": email}, {"phone": phone}]}
+                {"$or": [{"email": email_regex}, {"phone": phone}]}
             )
             if existing:
-                if existing.get("email") == email:
+                # To accurately report which one was duplicated, compare against standard text
+                if existing.get("email", "").lower() == email.strip().lower():
 
                     return False, "Email already registered", None
                 return False, "Phone number already registered", None
@@ -296,7 +299,8 @@ class AuthService:
             Tuple of (success, message, token_data or None).
         """
         try:
-            user = await self.users_collection.find_one({"email": email})
+            email_regex = {"$regex": f"^{email.strip()}$", "$options": "i"}
+            user = await self.users_collection.find_one({"email": email_regex})
 
             if not user:
 

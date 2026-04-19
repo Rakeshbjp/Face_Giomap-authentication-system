@@ -39,7 +39,9 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 @router.post("/check-user", response_model=StandardResponse)
 async def check_user(request: CheckUserRequest, db=Depends(get_database)):
     """Check if email or phone is already registered."""
-    email_exists = await db.users.find_one({"email": request.email})
+    # Case-insensitive search for email
+    email_regex = {"$regex": f"^{request.email.strip()}$", "$options": "i"}
+    email_exists = await db.users.find_one({"email": email_regex})
     phone_exists = await db.users.find_one({"phone": request.phone})
 
     if email_exists and phone_exists:
