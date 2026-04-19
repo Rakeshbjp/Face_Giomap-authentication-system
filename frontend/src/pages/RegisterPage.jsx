@@ -24,8 +24,6 @@ const RegisterPage = () => {
     phone: '',
     designation: '',
     joiningDate: '',
-    hoursPerDay: '',
-    weeklyOff: '',
     password: '',
     confirmPassword: '',
   });
@@ -81,12 +79,6 @@ const RegisterPage = () => {
     }
     if (!formData.joiningDate) {
       newErrors.joiningDate = 'Joining date is required';
-    }
-    if (!formData.hoursPerDay || isNaN(formData.hoursPerDay) || formData.hoursPerDay <= 0 || formData.hoursPerDay > 24) {
-      newErrors.hoursPerDay = 'Valid hours per day is required (1-24)';
-    }
-    if (!formData.weeklyOff.trim()) {
-      newErrors.weeklyOff = 'Weekly off is required (e.g. Sunday)';
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -145,8 +137,6 @@ const RegisterPage = () => {
           password: formData.password,
           designation: formData.designation.trim(),
           joining_date: formData.joiningDate,
-          hours_per_day: parseFloat(formData.hoursPerDay),
-          weekly_off: formData.weeklyOff.trim(),
           face_images: faceImages,
         };
         if (geoPosition) {
@@ -208,8 +198,6 @@ const RegisterPage = () => {
         password: formData.password,
         designation: formData.designation.trim(),
         joining_date: formData.joiningDate,
-        hours_per_day: parseFloat(formData.hoursPerDay),
-        weekly_off: formData.weeklyOff.trim(),
         face_images: [],
       };
       if (geoPosition) {
@@ -367,7 +355,7 @@ const RegisterPage = () => {
                 {errors.designation && <p className="text-red-500 text-xs mt-1">{errors.designation}</p>}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {/* Joining Date */}
                 <div>
                   <label htmlFor="joiningDate" className="block text-sm font-medium text-gray-700 mb-1">
@@ -385,47 +373,6 @@ const RegisterPage = () => {
                   />
                   {errors.joiningDate && <p className="text-red-500 text-xs mt-1">{errors.joiningDate}</p>}
                 </div>
-
-                {/* Hours Per Day */}
-                <div>
-                  <label htmlFor="hoursPerDay" className="block text-sm font-medium text-gray-700 mb-1">
-                    Hours Per Day
-                  </label>
-                  <input
-                    id="hoursPerDay"
-                    name="hoursPerDay"
-                    type="number"
-                    step="0.5"
-                    min="1"
-                    max="24"
-                    value={formData.hoursPerDay}
-                    onChange={handleChange}
-                    placeholder="8"
-                    className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors ${
-                      errors.hoursPerDay ? 'border-red-400' : 'border-gray-300'
-                    }`}
-                  />
-                  {errors.hoursPerDay && <p className="text-red-500 text-xs mt-1">{errors.hoursPerDay}</p>}
-                </div>
-              </div>
-
-              {/* Weekly Off */}
-              <div>
-                <label htmlFor="weeklyOff" className="block text-sm font-medium text-gray-700 mb-1">
-                  Weekly Off
-                </label>
-                <input
-                  id="weeklyOff"
-                  name="weeklyOff"
-                  type="text"
-                  value={formData.weeklyOff}
-                  onChange={handleChange}
-                  placeholder="e.g. Sunday, Saturday"
-                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors ${
-                    errors.weeklyOff ? 'border-red-400' : 'border-gray-300'
-                  }`}
-                />
-                {errors.weeklyOff && <p className="text-red-500 text-xs mt-1">{errors.weeklyOff}</p>}
               </div>
 
               {/* Password */}

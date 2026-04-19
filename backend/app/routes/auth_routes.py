@@ -22,6 +22,7 @@ from app.models.user import (
     FaceVerificationResponse,
     StandardResponse,
     CheckUserRequest,
+    CompanySettings,
 )
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user, security
@@ -35,6 +36,51 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 # ──────────────────────────────────────────────
 #  POST /api/auth/register
 # ──────────────────────────────────────────────
+
+@router.get("/settings", response_model=StandardResponse)
+async def get_company_settings(db=Depends(get_database)):
+    """Get the global company settings (without requiring authentication for registration display)."""
+    settings_doc = await db.settings.find_one({"type": "company_config"})
+    if settings_doc:
+        settings_doc["_id"] = str(settings_doc["_id"])
+        return StandardResponse(status=True, message="Settings fetched", data=settings_doc)
+    return StandardResponse(status=True, message="Defaults", data={"hours_per_day": 8.0, "weekly_off": "Sunday"})
+
+@router.post("/settings", response_model=StandardResponse)
+async def update_company_settings(
+    settings: CompanySettings, 
+    user: dict = Depends(get_current_user), 
+    db=Depends(get_database)
+):
+    """Update global company settings (Admin only). Also updates all existing employees to match new settings."""
+    if user.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can update company settings."
+        )
+
+    await db.settings.update_one(
+        {"type": "company_config"},
+        {
+            "$set": {
+                "hours_per_day": settings.hours_per_day,
+                "weekly_off": settings.weekly_off,
+                "updated_at": datetime.utcnow()
+            }
+        },
+        upsert=True
+    )
+    
+    # Cascade updates to all existing employees so they reflect the new company standard
+    await db.users.update_many(
+        {},
+        {"$set": {
+            "hours_per_day": settings.hours_per_day, 
+            "weekly_off": settings.weekly_off
+        }}
+    )
+    
+    return StandardResponse(status=True, message="Settings updated and cascaded to all employees successfully")
 
 @router.post("/check-user", response_model=StandardResponse)
 async def check_user(request: CheckUserRequest, db=Depends(get_database)):
@@ -72,8 +118,6 @@ async def register_user(request: UserRegisterRequest, db=Depends(get_database)):
         password=request.password,
         designation=request.designation,
         joining_date=request.joining_date,
-        hours_per_day=request.hours_per_day,
-        weekly_off=request.weekly_off,
         face_images=request.face_images,
         location=request.location.model_dump() if request.location else None,
     )

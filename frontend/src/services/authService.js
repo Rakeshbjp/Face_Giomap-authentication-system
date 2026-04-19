@@ -147,3 +147,19 @@ export const geocodeLocation = async (latitude, longitude) => {
   const response = await api.post('/auth/geocode', { latitude, longitude });
   return response.data;
 };
+
+export const getCompanySettings = async () => {
+  const response = await api.get('/auth/settings');
+  return response.data;
+};
+
+export const updateCompanySettings = async (hours_per_day, weekly_off) => {
+  try {
+    const response = await api.post('/auth/settings', { hours_per_day, weekly_off });
+    return response.data;
+  } catch (err) {
+    const detail = err.response?.data?.detail;
+    if (detail) throw new Error(Array.isArray(detail) ? detail.map(e => e.msg).join(', ') : detail);
+    throw new Error(err.response?.data?.message || 'Failed to update company settings');
+  }
+};

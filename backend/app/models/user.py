@@ -41,8 +41,6 @@ class UserRegisterRequest(BaseModel):
     )
     designation: str = Field(..., min_length=2, max_length=100, description="Employee designation")
     joining_date: str = Field(..., description="Date of joining (YYYY-MM-DD)")
-    hours_per_day: float = Field(..., gt=0, le=24, description="Working hours per day")
-    weekly_off: str = Field(..., description="Day(s) off each week (e.g., 'Sunday', 'Saturday, Sunday')")
 
     @field_validator("phone")
     @classmethod
@@ -67,6 +65,10 @@ class UserRegisterRequest(BaseModel):
             raise ValueError("Password must contain at least one special character")
         return v
 
+class CompanySettings(BaseModel):
+    """Schema for global company settings."""
+    hours_per_day: float = Field(..., gt=0, le=24, description="Global working hours per day")
+    weekly_off: str = Field(..., description="Day(s) off each week (e.g., 'Sunday')")
 
 class CheckUserRequest(BaseModel):
     """Schema to check if a user exists by email or phone."""

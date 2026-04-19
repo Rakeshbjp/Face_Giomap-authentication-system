@@ -142,8 +142,6 @@ class AuthService:
         password: str,
         designation: str,
         joining_date: str,
-        hours_per_day: float,
-        weekly_off: str,
         face_images: list,
         location: Optional[dict] = None,
     ) -> Tuple[bool, str, Optional[str]]:
@@ -256,6 +254,11 @@ class AuthService:
             # Auto-generate a simple alphanumeric employee ID: EMP-xxxxxx
             employee_id = f"EMP-{uuid.uuid4().hex[:6].upper()}"
 
+            # Fetch global company settings
+            settings_doc = await self.db.settings.find_one({"type": "company_config"})
+            global_hours = settings_doc.get("hours_per_day", 8.0) if settings_doc else 8.0
+            global_weekly_off = settings_doc.get("weekly_off", "Sunday") if settings_doc else "Sunday"
+
             # Create user document
             user_doc = {
                 "name": name,
@@ -265,8 +268,8 @@ class AuthService:
                 "employee_id": employee_id,
                 "designation": designation,
                 "joining_date": joining_date,
-                "hours_per_day": hours_per_day,
-                "weekly_off": weekly_off,
+                "hours_per_day": global_hours,
+                "weekly_off": global_weekly_off,
                 "password_hash": password_hash,
                 "face_embeddings": encrypted_embeddings,
                 "registered_location": location,
