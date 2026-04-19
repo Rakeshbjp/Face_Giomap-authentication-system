@@ -351,16 +351,13 @@ class AuthService:
                     email_reg_str = format_addr(reg_addr, reg_loc['latitude'], reg_loc['longitude'])
                     email_curr_str = format_addr(curr_addr, location['latitude'], location['longitude'])
                     
-                    reg_display = f"({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {reg_addr.get('display_name', 'Location')}"
-                    curr_display = f"({location['latitude']:.6f}, {location['longitude']:.6f}) - {curr_addr.get('display_name', 'Location')}"
-
                     return (
                         False,
                         f"LOGIN FAILED — Location mismatch! "
                         f"You are {dist:.0f}m away from your registered location. "
                         f"Max allowed: {LOCATION_RADIUS_M}m. "
-                        f"Registered: {reg_display}. "
-                        f"Current: {curr_display}. "
+                        f"Registered: ({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {email_reg_str}. "
+                        f"Current: ({location['latitude']:.6f}, {location['longitude']:.6f}) - {email_curr_str}. "
                         f"You can only login from your registered location. "
                         f"To login from this new location, you must register a new account first.",
                         None,
