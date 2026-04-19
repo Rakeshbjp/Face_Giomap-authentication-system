@@ -10,7 +10,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import FaceCaptureRegistration from '../components/face/FaceCaptureRegistration';
 import Spinner from '../components/ui/Spinner';
-import { registerUser } from '../services/authService';
+import { registerUser, checkUser } from '../services/authService';
 import useGeolocation from '../hooks/useGeolocation';
 
 const RegisterPage = () => {
@@ -83,10 +83,20 @@ const RegisterPage = () => {
   /**
    * Proceed to face capture step.
    */
-  const handleNext = (e) => {
+  const handleNext = async (e) => {
     e.preventDefault();
     if (validateForm()) {
-      setStep(2);
+      setIsSubmitting(true);
+      const emailToCheck = formData.email.trim().toLowerCase();
+      const phoneToCheck = formData.phone.replace(/[\s\-()]/g, '');
+      const result = await checkUser(emailToCheck, phoneToCheck);
+      setIsSubmitting(false);
+      
+      if (result.status) {
+        setStep(2);
+      } else {
+        toast.error(result.message || 'User already registered');
+      }
     }
   };
 
@@ -363,9 +373,10 @@ const RegisterPage = () => {
 
               <button
                 type="submit"
-                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+                disabled={isSubmitting}
+                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors disabled:bg-blue-400"
               >
-                Next: Face Registration →
+                {isSubmitting ? 'Checking details...' : 'Next: Face Registration →'}
               </button>
             </form>
           )}

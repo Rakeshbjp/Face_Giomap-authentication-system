@@ -21,6 +21,7 @@ from app.models.user import (
     AuthTokenResponse,
     FaceVerificationResponse,
     StandardResponse,
+    CheckUserRequest,
 )
 from app.services.auth_service import AuthService
 from app.middleware.auth_middleware import get_current_user, security
@@ -34,6 +35,23 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 # ──────────────────────────────────────────────
 #  POST /api/auth/register
 # ──────────────────────────────────────────────
+
+@router.post("/check-user", response_model=StandardResponse)
+async def check_user(request: CheckUserRequest, db=Depends(get_database)):
+    """Check if email or phone is already registered."""
+    existing = await db.users.find_one(
+        {"$or": [{"email": request.email}, {"phone": request.phone}]}
+    )
+    if existing:
+        if existing.get("email") == request.email:
+            # We return status=True but state the user exists, or status=False to indicate error
+            # Better to return status=False with message so frontend can handle it directly or StandardResponse format
+            return StandardResponse(status=False, message="Email already registered")
+        return StandardResponse(status=False, message="Phone number already registered")
+        
+    return StandardResponse(status=True, message="User not registered")
+
+
 
 @router.post("/register", response_model=RegisterResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(request: UserRegisterRequest, db=Depends(get_database)):

@@ -64,6 +64,21 @@ class UserRegisterRequest(BaseModel):
         return v
 
 
+class CheckUserRequest(BaseModel):
+    """Schema to check if a user exists by email or phone."""
+    email: EmailStr = Field(..., description="Unique email address")
+    phone: str = Field(..., min_length=10, max_length=15, description="Unique phone number")
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        """Validate phone number format."""
+        cleaned = re.sub(r"[\s\-\(\)]", "", v)
+        if not re.match(r"^\+?\d{10,15}$", cleaned):
+            raise ValueError("Invalid phone number format")
+        return cleaned
+
+
 class UserLoginRequest(BaseModel):
     """Schema for email + password login."""
     email: EmailStr = Field(..., description="User email")

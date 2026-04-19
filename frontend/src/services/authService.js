@@ -15,6 +15,25 @@ export const registerUser = async (data) => {
 };
 
 /**
+ * Check if a user is already registered.
+ * @param {string} email
+ * @param {string} phone
+ * @returns {Promise} API response
+ */
+export const checkUser = async (email, phone) => {
+  try {
+    const response = await api.post('/auth/check-user', { email, phone });
+    return response.data;
+  } catch (err) {
+    const detail = err.response?.data?.detail;
+    const message = Array.isArray(detail)
+      ? detail.map((e) => e.msg).join(', ')
+      : detail || err.response?.data?.message || 'Server connection error';
+    return { status: false, message: message };
+  }
+};
+
+/**
  * Login with email and password.
  * @param {string} email
  * @param {string} password
