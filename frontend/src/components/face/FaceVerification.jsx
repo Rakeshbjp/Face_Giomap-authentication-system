@@ -215,7 +215,7 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
           </button>
           {onCancel && (
             <button onClick={onCancel} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm">
-              Cancel
+              ← Back
             </button>
           )}
         </div>
@@ -367,7 +367,7 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
             onClick={onCancel}
             className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            Cancel
+            ← Back
           </button>
         )}
         <button
