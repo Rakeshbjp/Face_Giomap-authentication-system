@@ -96,7 +96,10 @@ const RegisterPage = () => {
         setStep(2);
       } else {
         const errorMsg = result.message || 'User already registered';
-        if (errorMsg.toLowerCase().includes('email')) {
+        if (errorMsg.toLowerCase().includes('email') && errorMsg.toLowerCase().includes('phone')) {
+          setErrors(prev => ({ ...prev, email: errorMsg, phone: errorMsg }));
+          toast.error(errorMsg);
+        } else if (errorMsg.toLowerCase().includes('email')) {
           setErrors(prev => ({ ...prev, email: errorMsg }));
           toast.error(errorMsg);
         } else if (errorMsg.toLowerCase().includes('phone')) {

@@ -39,16 +39,16 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 @router.post("/check-user", response_model=StandardResponse)
 async def check_user(request: CheckUserRequest, db=Depends(get_database)):
     """Check if email or phone is already registered."""
-    existing = await db.users.find_one(
-        {"$or": [{"email": request.email}, {"phone": request.phone}]}
-    )
-    if existing:
-        if existing.get("email") == request.email:
-            # We return status=True but state the user exists, or status=False to indicate error
-            # Better to return status=False with message so frontend can handle it directly or StandardResponse format
-            return StandardResponse(status=False, message="Email already registered")
+    email_exists = await db.users.find_one({"email": request.email})
+    phone_exists = await db.users.find_one({"phone": request.phone})
+
+    if email_exists and phone_exists:
+        return StandardResponse(status=False, message="Email and phone number are already registered")
+    elif email_exists:
+        return StandardResponse(status=False, message="Email already registered")
+    elif phone_exists:
         return StandardResponse(status=False, message="Phone number already registered")
-        
+
     return StandardResponse(status=True, message="User not registered")
 
 
