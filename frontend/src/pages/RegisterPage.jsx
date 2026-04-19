@@ -334,6 +334,20 @@ const RegisterPage = () => {
                 {errors.phone && <p className="text-red-500 text-xs mt-1">{errors.phone}</p>}
               </div>
 
+              {/* Auto-Generated Employee ID */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                  Employee ID
+                  <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-semibold">Auto</span>
+                </label>
+                <input
+                  type="text"
+                  disabled
+                  value="Generated automatically upon registration"
+                  className="w-full px-4 py-2.5 border border-gray-200 bg-gray-50 text-gray-500 rounded-lg outline-none cursor-not-allowed"
+                />
+              </div>
+
               {/* Designation */}
               <div>
                 <label htmlFor="designation" className="block text-sm font-medium text-gray-700 mb-1">
