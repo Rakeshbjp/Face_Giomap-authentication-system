@@ -140,6 +140,10 @@ class AuthService:
         email: str,
         phone: str,
         password: str,
+        designation: str,
+        joining_date: str,
+        hours_per_day: float,
+        weekly_off: str,
         face_images: list,
         location: Optional[dict] = None,
     ) -> Tuple[bool, str, Optional[str]]:
@@ -248,12 +252,21 @@ class AuthService:
                     location["latitude"], location["longitude"]
                 )
 
+            import uuid
+            # Auto-generate a simple alphanumeric employee ID: EMP-xxxxxx
+            employee_id = f"EMP-{uuid.uuid4().hex[:6].upper()}"
+
             # Create user document
             user_doc = {
                 "name": name,
                 "email": email,
                 "phone": phone,
                 "role": "admin" if email == "admin@example.com" else "user",
+                "employee_id": employee_id,
+                "designation": designation,
+                "joining_date": joining_date,
+                "hours_per_day": hours_per_day,
+                "weekly_off": weekly_off,
                 "password_hash": password_hash,
                 "face_embeddings": encrypted_embeddings,
                 "registered_location": location,

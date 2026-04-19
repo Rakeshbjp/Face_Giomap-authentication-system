@@ -39,6 +39,10 @@ class UserRegisterRequest(BaseModel):
         default=None,
         description="GPS coordinates at time of registration. Used for location-locked login."
     )
+    designation: str = Field(..., min_length=2, max_length=100, description="Employee designation")
+    joining_date: str = Field(..., description="Date of joining (YYYY-MM-DD)")
+    hours_per_day: float = Field(..., gt=0, le=24, description="Working hours per day")
+    weekly_off: str = Field(..., description="Day(s) off each week (e.g., 'Sunday', 'Saturday, Sunday')")
 
     @field_validator("phone")
     @classmethod
@@ -114,6 +118,11 @@ class UserResponse(BaseModel):
     email: str
     phone: str
     role: str = "user"
+    employee_id: Optional[str] = None
+    designation: Optional[str] = None
+    joining_date: Optional[str] = None
+    hours_per_day: Optional[float] = None
+    weekly_off: Optional[str] = None
     registered_location: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
@@ -174,6 +183,11 @@ class UserDocument(BaseModel):
         default=None,
         description="GPS location at registration time: {latitude, longitude}"
     )
+    employee_id: Optional[str] = Field(default=None, description="Auto-generated unique employee ID")
+    designation: Optional[str] = Field(default=None, description="Employee job designation")
+    joining_date: Optional[str] = Field(default=None, description="Initial employment date")
+    hours_per_day: Optional[float] = Field(default=None, description="Mandatory daily work hours")
+    weekly_off: Optional[str] = Field(default=None, description="Assigned days off")
     liveness_verified: bool = False
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)

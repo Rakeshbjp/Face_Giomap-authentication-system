@@ -140,6 +140,36 @@ const DashboardPage = () => {
               <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Phone</p>
               <p className="text-gray-900 font-medium">{user?.phone || 'N/A'}</p>
             </div>
+            {user?.employee_id && (
+              <div className="bg-gray-50 rounded-xl p-4 border border-blue-50">
+                <p className="text-xs text-blue-500 uppercase tracking-wider mb-1">Employee ID</p>
+                <p className="text-blue-900 font-bold">{user.employee_id}</p>
+              </div>
+            )}
+            {user?.designation && (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Designation</p>
+                <p className="text-gray-900 font-medium">{user.designation}</p>
+              </div>
+            )}
+            {user?.joining_date && (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Joining Date</p>
+                <p className="text-gray-900 font-medium">{user.joining_date}</p>
+              </div>
+            )}
+            {user?.hours_per_day && (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Hours / Day</p>
+                <p className="text-gray-900 font-medium">{user.hours_per_day} hours</p>
+              </div>
+            )}
+            {user?.weekly_off && (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Weekly Off</p>
+                <p className="text-gray-900 font-medium">{user.weekly_off}</p>
+              </div>
+            )}
             <div className="bg-gray-50 rounded-xl p-4">
               <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Member Since</p>
               <p className="text-gray-900 font-medium">
