@@ -50,29 +50,15 @@ const useScreenProtection = () => {
       }
     };
 
-    // 3. Detect visibility loss (Strict mode for preventing cross-tab/external screen sharing)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') {
-        triggerLogout("Tab switched. This is indicative of unauthorized screen sharing or external tool use.");
-      }
-    };
-
-    // 4. Detect window focus loss (Strict mode)
-    const handleBlur = () => {
-      // If the window loses focus, they might be interacting with a screen sharing overlay or desktop app
-      triggerLogout("Window focus lost. Screen sharing activity suspected.");
-    };
+    // Relaxed strict mode: Removed overly aggressive blur and visibility loss tracking
+    // because mobile browsers trigger these frequently (keyboard popups, battery notifications, taking screenshots)
 
     window.addEventListener('keyup', handleKeyDown);
     window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('blur', handleBlur);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('keyup', handleKeyDown);
       window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('blur', handleBlur);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
       
       // Restore original display media API on unmount if it was hooked
       // Normally we would restore it, but modifying prototype globally might be permanent per session.
