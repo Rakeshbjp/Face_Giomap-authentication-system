@@ -445,11 +445,11 @@ const FaceCaptureRegistration = ({ onCaptureComplete, onCancel, spoofError, onDi
         ))}
       </div>
 
-      {/* Back */}
+      {/* Cancel */}
       {onCancel && !isDone && (
         <div className="text-center">
           <button onClick={onCancel} className="px-6 py-2 text-gray-500 hover:text-gray-700 text-sm transition-colors">
-            ← Back
+            Back
           </button>
         </div>
       )}
