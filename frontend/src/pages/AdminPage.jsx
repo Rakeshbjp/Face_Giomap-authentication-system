@@ -19,7 +19,7 @@ const AdminPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   
   // Login states
-  const [email, setEmail] = useState('admin@example.com');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 

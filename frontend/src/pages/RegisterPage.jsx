@@ -23,6 +23,7 @@ const RegisterPage = () => {
     email: '',
     phone: '',
     designation: '',
+    profession: '',
     joiningDate: '',
     password: '',
     confirmPassword: '',
@@ -76,6 +77,9 @@ const RegisterPage = () => {
 
     if (!formData.designation.trim() || formData.designation.trim().length < 2) {
       newErrors.designation = 'Designation is required';
+    }
+    if (!formData.profession) {
+      newErrors.profession = 'Profession is required';
     }
     if (!formData.joiningDate) {
       newErrors.joiningDate = 'Joining date is required';
@@ -136,6 +140,7 @@ const RegisterPage = () => {
           phone: formData.phone.replace(/[\s\-()]/g, ''),
           password: formData.password,
           designation: formData.designation.trim(),
+          profession: formData.profession,
           joining_date: formData.joiningDate,
           face_images: faceImages,
         };
@@ -197,6 +202,7 @@ const RegisterPage = () => {
         phone: formData.phone.replace(/[\s\-()]/g, ''),
         password: formData.password,
         designation: formData.designation.trim(),
+        profession: formData.profession,
         joining_date: formData.joiningDate,
         face_images: [],
       };
@@ -353,6 +359,43 @@ const RegisterPage = () => {
                   }`}
                 />
                 {errors.designation && <p className="text-red-500 text-xs mt-1">{errors.designation}</p>}
+              </div>
+
+              {/* Profession */}
+              <div>
+                <label htmlFor="profession" className="block text-sm font-medium text-gray-700 mb-1">
+                  Profession <span className="text-red-400">*</span>
+                </label>
+                <select
+                  id="profession"
+                  name="profession"
+                  value={formData.profession}
+                  onChange={handleChange}
+                  className={`w-full px-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors bg-white ${
+                    errors.profession ? 'border-red-400' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="" disabled>Select your profession</option>
+                  <option value="Employee">Employee</option>
+                  <option value="HR">HR</option>
+                  <option value="Manager">Manager</option>
+                  <option value="Team Leader">Team Leader</option>
+                  <option value="Senior Manager">Senior Manager</option>
+                  <option value="Director">Director</option>
+                  <option value="Vice President">Vice President</option>
+                  <option value="CTO">CTO</option>
+                  <option value="CFO">CFO</option>
+                  <option value="COO">COO</option>
+                  <option value="CEO">CEO</option>
+                  <option value="Managing Director">Managing Director</option>
+                </select>
+                {errors.profession && <p className="text-red-500 text-xs mt-1">{errors.profession}</p>}
+                {formData.profession && formData.profession !== 'Employee' && (
+                  <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                    Admin Portal access will be granted
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 gap-4">

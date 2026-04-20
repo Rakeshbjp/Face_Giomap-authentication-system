@@ -138,6 +138,7 @@ async def register_user(request: UserRegisterRequest, db=Depends(get_database)):
         phone=request.phone,
         password=request.password,
         designation=request.designation,
+        profession=request.profession,
         joining_date=request.joining_date,
         face_images=request.face_images,
         location=request.location.model_dump() if request.location else None,

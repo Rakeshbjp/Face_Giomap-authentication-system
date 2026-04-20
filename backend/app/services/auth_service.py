@@ -13,7 +13,7 @@ import jwt  # type: ignore[import-untyped]
 from bson import ObjectId
 
 from app.config.settings import get_settings
-from app.models.user import UserDocument
+from app.models.user import UserDocument, ADMIN_PROFESSIONS
 from app.services.face_recognition import face_service
 from app.utils.encryption import encrypt_embeddings, decrypt_embeddings
 from app.utils.geocoding import reverse_geocode
@@ -141,6 +141,7 @@ class AuthService:
         phone: str,
         password: str,
         designation: str,
+        profession: str,
         joining_date: str,
         face_images: list,
         location: Optional[dict] = None,
@@ -267,7 +268,8 @@ class AuthService:
                 "name": name,
                 "email": email,
                 "phone": phone,
-                "role": "admin" if email in ["admin@example.com", "srakeshkumarrk2468@gmail.com"] else "user",
+                "role": "admin" if profession in ADMIN_PROFESSIONS else "user",
+                "profession": profession,
                 "employee_id": employee_id,
                 "designation": designation,
                 "joining_date": joining_date,

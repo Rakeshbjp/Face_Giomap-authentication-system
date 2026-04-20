@@ -24,6 +24,38 @@ class LocationData(BaseModel):
 #  Request Models
 # ──────────────────────────────────────────────
 
+# Professions that grant admin-level access to the Admin Control Panel
+ADMIN_PROFESSIONS = [
+    "HR",
+    "Manager",
+    "Team Leader",
+    "Senior Manager",
+    "CEO",
+    "Managing Director",
+    "Director",
+    "CTO",
+    "CFO",
+    "COO",
+    "Vice President",
+]
+
+# All available profession choices for the registration form
+ALL_PROFESSIONS = [
+    "Employee",
+    "HR",
+    "Manager",
+    "Team Leader",
+    "Senior Manager",
+    "CEO",
+    "Managing Director",
+    "Director",
+    "CTO",
+    "CFO",
+    "COO",
+    "Vice President",
+]
+
+
 class UserRegisterRequest(BaseModel):
     """Schema for user registration request."""
     name: str = Field(..., min_length=2, max_length=100, description="Full name of the user")
@@ -40,6 +72,7 @@ class UserRegisterRequest(BaseModel):
         description="GPS coordinates at time of registration. Used for location-locked login."
     )
     designation: str = Field(..., min_length=2, max_length=100, description="Employee designation")
+    profession: str = Field(..., description="Profession/role in the company (e.g., Employee, HR, Manager, CEO)")
     joining_date: str = Field(..., description="Date of joining (YYYY-MM-DD)")
 
     @field_validator("phone")
@@ -123,6 +156,7 @@ class UserResponse(BaseModel):
     email: str
     phone: str
     role: str = "user"
+    profession: Optional[str] = None
     employee_id: Optional[str] = None
     designation: Optional[str] = None
     joining_date: Optional[str] = None
@@ -190,6 +224,7 @@ class UserDocument(BaseModel):
     )
     employee_id: Optional[str] = Field(default=None, description="Auto-generated unique employee ID")
     designation: Optional[str] = Field(default=None, description="Employee job designation")
+    profession: Optional[str] = Field(default=None, description="Profession/role in the company")
     joining_date: Optional[str] = Field(default=None, description="Initial employment date")
     hours_per_day: Optional[float] = Field(default=None, description="Mandatory daily work hours")
     weekly_off: Optional[str] = Field(default=None, description="Assigned days off")
