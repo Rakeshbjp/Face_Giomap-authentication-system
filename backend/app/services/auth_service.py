@@ -257,6 +257,9 @@ class AuthService:
             # Fetch global company settings
             settings_doc = await self.db.settings.find_one({"type": "company_config"})
             global_hours = settings_doc.get("hours_per_day", 8.0) if settings_doc else 8.0
+            global_hours_week = settings_doc.get("hours_per_week", 40.0) if settings_doc else 40.0
+            global_hours_month = settings_doc.get("hours_per_month", 160.0) if settings_doc else 160.0
+            global_hours_year = settings_doc.get("hours_per_year", 1920.0) if settings_doc else 1920.0
             global_weekly_off = settings_doc.get("weekly_off", "Sunday") if settings_doc else "Sunday"
 
             # Create user document
@@ -269,6 +272,9 @@ class AuthService:
                 "designation": designation,
                 "joining_date": joining_date,
                 "hours_per_day": global_hours,
+                "hours_per_week": global_hours_week,
+                "hours_per_month": global_hours_month,
+                "hours_per_year": global_hours_year,
                 "weekly_off": global_weekly_off,
                 "password_hash": password_hash,
                 "face_embeddings": encrypted_embeddings,

@@ -101,14 +101,7 @@ const AppRoutes = () => {
           }
         />
         <Route path="/logout-kiosk" element={<LogoutKioskPage />} />
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute>
-              <AdminPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>

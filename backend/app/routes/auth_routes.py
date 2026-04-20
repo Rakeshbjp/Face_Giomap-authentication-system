@@ -49,7 +49,17 @@ async def get_company_settings(db=Depends(get_database)):
     if settings_doc:
         settings_doc["_id"] = str(settings_doc["_id"])
         return StandardResponse(status=True, message="Settings fetched", data=settings_doc)
-    return StandardResponse(status=True, message="Defaults", data={"hours_per_day": 8.0, "weekly_off": "Sunday"})
+    return StandardResponse(
+        status=True, 
+        message="Defaults", 
+        data={
+            "hours_per_day": 8.0, 
+            "hours_per_week": 40.0,
+            "hours_per_month": 160.0,
+            "hours_per_year": 1920.0,
+            "weekly_off": "Sunday"
+        }
+    )
 
 @router.post("/settings", response_model=StandardResponse)
 async def update_company_settings(
@@ -69,6 +79,9 @@ async def update_company_settings(
         {
             "$set": {
                 "hours_per_day": settings.hours_per_day,
+                "hours_per_week": settings.hours_per_week,
+                "hours_per_month": settings.hours_per_month,
+                "hours_per_year": settings.hours_per_year,
                 "weekly_off": settings.weekly_off,
                 "updated_at": datetime.utcnow()
             }
@@ -81,6 +94,9 @@ async def update_company_settings(
         {},
         {"$set": {
             "hours_per_day": settings.hours_per_day, 
+            "hours_per_week": settings.hours_per_week,
+            "hours_per_month": settings.hours_per_month,
+            "hours_per_year": settings.hours_per_year,
             "weekly_off": settings.weekly_off
         }}
     )
@@ -481,6 +497,9 @@ async def kiosk_get_employee(employee_id: str, db=Depends(get_database)):
         "designation": user.get("designation"),
         "employee_id": user.get("employee_id"),
         "hours_per_day": user.get("hours_per_day", 8),
+        "hours_per_week": user.get("hours_per_week", 40),
+        "hours_per_month": user.get("hours_per_month", 160),
+        "hours_per_year": user.get("hours_per_year", 1920),
         "last_login_at": user.get("last_login_at"),
     })
 
