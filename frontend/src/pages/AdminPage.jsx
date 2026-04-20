@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
-import { loginWithPassword, getProfile } from '../services/authService';
+import { loginWithPassword, getProfile, getCompanySettings, updateCompanySettings } from '../services/authService';
 
 const AdminPage = () => {
   const { user, loginSuccess, faceVerified } = useAuth();
