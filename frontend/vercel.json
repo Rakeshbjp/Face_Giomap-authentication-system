@@ -5,6 +5,10 @@
   "installCommand": "npm install --legacy-peer-deps",
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "https://face-auth-backend.onrender.com/api/:path*"
+    },
+    {
       "source": "/((?!assets/).*)",
       "destination": "/index.html"
     }
