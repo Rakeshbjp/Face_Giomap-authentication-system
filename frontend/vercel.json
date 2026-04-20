@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://face-auth-backend.onrender.com/api/:path*"
+      "destination": "https://face-auth-backend-q40q.onrender.com/api/:path*"
     },
     {
       "source": "/((?!assets/).*)",
