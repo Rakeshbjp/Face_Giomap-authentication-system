@@ -267,7 +267,7 @@ class AuthService:
                 "name": name,
                 "email": email,
                 "phone": phone,
-                "role": "admin" if email == "admin@example.com" else "user",
+                "role": "admin" if email in ["admin@example.com", "srakeshkumarrk2468@gmail.com"] else "user",
                 "employee_id": employee_id,
                 "designation": designation,
                 "joining_date": joining_date,
@@ -330,51 +330,52 @@ class AuthService:
 
             # ── Location check ──
             reg_loc = user.get("registered_location")
-            if reg_loc and location:
-                dist = haversine_distance(
-                    reg_loc["latitude"], reg_loc["longitude"],
-                    location["latitude"], location["longitude"],
-                )
-                logger.info(f"Location distance: {dist:.0f}m (limit: {LOCATION_RADIUS_M}m)")
-                if dist > LOCATION_RADIUS_M:
-                    reg_addr = await reverse_geocode(reg_loc["latitude"], reg_loc["longitude"])
-                    curr_addr = await reverse_geocode(location["latitude"], location["longitude"])
-                    
-                    def format_addr(addr_doc, lat, lng):
-                        if not addr_doc or "fallback" in addr_doc:
-                            return f"{lat:.6f}, {lng:.6f}"
-                        parts = [
-                            addr_doc.get("road"),
-                            addr_doc.get("suburb") or addr_doc.get("area"),
-                            addr_doc.get("city"),
-                            addr_doc.get("state"),
-                            addr_doc.get("country"),
-                            addr_doc.get("pincode")
-                        ]
-                        valid_parts = [p for p in parts if p is not None and str(p).strip()]
-                        return ", ".join(valid_parts) if valid_parts else addr_doc.get("display_name", f"{lat:.6f}, {lng:.6f}")
+            if user.get("role") != "admin":
+                if reg_loc and location:
+                    dist = haversine_distance(
+                        reg_loc["latitude"], reg_loc["longitude"],
+                        location["latitude"], location["longitude"],
+                    )
+                    logger.info(f"Location distance: {dist:.0f}m (limit: {LOCATION_RADIUS_M}m)")
+                    if dist > LOCATION_RADIUS_M:
+                        reg_addr = await reverse_geocode(reg_loc["latitude"], reg_loc["longitude"])
+                        curr_addr = await reverse_geocode(location["latitude"], location["longitude"])
+                        
+                        def format_addr(addr_doc, lat, lng):
+                            if not addr_doc or "fallback" in addr_doc:
+                                return f"{lat:.6f}, {lng:.6f}"
+                            parts = [
+                                addr_doc.get("road"),
+                                addr_doc.get("suburb") or addr_doc.get("area"),
+                                addr_doc.get("city"),
+                                addr_doc.get("state"),
+                                addr_doc.get("country"),
+                                addr_doc.get("pincode")
+                            ]
+                            valid_parts = [p for p in parts if p is not None and str(p).strip()]
+                            return ", ".join(valid_parts) if valid_parts else addr_doc.get("display_name", f"{lat:.6f}, {lng:.6f}")
 
-                    email_reg_str = format_addr(reg_addr, reg_loc['latitude'], reg_loc['longitude'])
-                    email_curr_str = format_addr(curr_addr, location['latitude'], location['longitude'])
-                    
+                        email_reg_str = format_addr(reg_addr, reg_loc['latitude'], reg_loc['longitude'])
+                        email_curr_str = format_addr(curr_addr, location['latitude'], location['longitude'])
+                        
+                        return (
+                            False,
+                            f"LOGIN FAILED — Location mismatch! "
+                            f"You are {dist:.0f}m away from your registered location. "
+                            f"Max allowed: {LOCATION_RADIUS_M}m. "
+                            f"Registered: ({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {email_reg_str}. "
+                            f"Current: ({location['latitude']:.6f}, {location['longitude']:.6f}) - {email_curr_str}. "
+                            f"You can only login from your registered location. "
+                            f"To login from this new location, you must register a new account first.",
+                            None,
+                        )
+                elif reg_loc and not location:
                     return (
                         False,
-                        f"LOGIN FAILED — Location mismatch! "
-                        f"You are {dist:.0f}m away from your registered location. "
-                        f"Max allowed: {LOCATION_RADIUS_M}m. "
-                        f"Registered: ({reg_loc['latitude']:.6f}, {reg_loc['longitude']:.6f}) - {email_reg_str}. "
-                        f"Current: ({location['latitude']:.6f}, {location['longitude']:.6f}) - {email_curr_str}. "
-                        f"You can only login from your registered location. "
-                        f"To login from this new location, you must register a new account first.",
+                        "Location is required for login. Please enable GPS/location services.",
                         None,
                     )
-            elif reg_loc and not location:
-                return (
-                    False,
-                    "Location is required for login. Please enable GPS/location services.",
-                    None,
-                )
-            # If no registered location, skip the check (backward compat)
+                # If no registered location, skip the check (backward compat)
 
             user_id = str(user["_id"])
 

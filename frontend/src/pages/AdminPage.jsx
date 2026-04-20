@@ -54,25 +54,22 @@ const AdminPage = () => {
     setIsLoggingIn(true);
     try {
       const res = await loginWithPassword(email, password, null);
-      if (res.status) {
-        // Simple admin login (skip face if needed or simulate it)
-        // Set tokens
-        loginSuccess(res.data);
-        
-        // Fetch profile to set the user
-        const profRes = await getProfile();
-        if (profRes.data.role !== 'admin') {
-          toast.error("Account does not have admin privileges");
-          // Logout logic here if needed...
-        } else {
-          faceVerified(profRes.data); // mock face verification for admin to bypass guards
-          toast.success("Admin authenticated successfully");
-        }
+      // loginWithPassword throws on error, so if we reach here it was successful!
+      loginSuccess(res);
+      
+      // Fetch profile to set the user
+      const profRes = await getProfile();
+      if (profRes.data.role !== 'admin') {
+        toast.error("Account does not have admin privileges");
+        // Logout logic here if needed...
       } else {
-        toast.error(res.message || "Invalid admin credentials");
+        faceVerified(profRes.data); // mock face verification for admin to bypass guards
+        toast.success("Admin authenticated successfully");
       }
     } catch (err) {
-      toast.error(err.message || "Authentication failed");
+      const detail = err?.response?.data?.detail;
+      const errorMessage = Array.isArray(detail) ? detail.map(e => e.msg).join(', ') : detail || err.message || "Authentication failed";
+      toast.error(errorMessage);
     } finally {
       setIsLoggingIn(false);
     }
