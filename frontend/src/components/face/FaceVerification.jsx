@@ -133,6 +133,11 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
             popupTimer.current = setTimeout(() => {
               onVerified && onVerified(result.result);
             }, 1500);
+          } else if (result && typeof result.message === 'string' && 
+                    (result.message.toLowerCase().includes('location mismatch') || result.message.toLowerCase().includes('location is required'))) {
+            setAutoScanEnabled(false);
+            if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+            onFailed && onFailed(result.message, true);
           }
         });
       }, 1500);
@@ -148,7 +153,15 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
               onVerified && onVerified(result.result);
             }, 1500);
           } else {
-            // On failure, briefly show popup then auto-dismiss for next scan
+            if (result && typeof result.message === 'string' && 
+                (result.message.toLowerCase().includes('location mismatch') || result.message.toLowerCase().includes('location is required'))) {
+              setAutoScanEnabled(false);
+              if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+              onFailed && onFailed(result.message, true);
+              return;
+            }
+
+            // On face failure, briefly show popup then auto-dismiss for next scan
             setTimeout(() => {
               if (mountedRef.current) {
                 setShowPopup(false);
@@ -180,8 +193,13 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
       popupTimer.current = setTimeout(() => {
         onVerified && onVerified(result.result);
       }, 1500);
+    } else if (result && typeof result.message === 'string' &&
+               (result.message.toLowerCase().includes('location mismatch') || result.message.toLowerCase().includes('location is required'))) {
+      setAutoScanEnabled(false);
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      onFailed && onFailed(result.message, true);
     }
-  }, [doVerify, onVerified]);
+  }, [doVerify, onVerified, onFailed]);
 
   /**
    * Dismiss the result popup and reset to idle.

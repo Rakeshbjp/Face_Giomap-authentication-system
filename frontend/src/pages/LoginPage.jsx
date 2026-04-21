@@ -186,8 +186,13 @@ const LoginPage = () => {
    * Handle failed face verification.
    */
   const handleFaceFailed = useCallback(
-    (msg) => {
-      toast.error(msg || 'Face verification failed');
+    (msg, isLocationError = false) => {
+      if (isLocationError || (typeof msg === 'string' && (msg.toLowerCase().includes('location mismatch') || msg.toLowerCase().includes('location is required')))) {
+        setLocationError(msg);
+        setStep('credentials'); // Go back to credentials so the Location Verification Warning popup renders clearly without video overlay
+      } else {
+        toast.error(msg || 'Face verification failed');
+      }
     },
     []
   );
