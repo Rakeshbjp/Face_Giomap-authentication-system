@@ -100,11 +100,11 @@ class UserRegisterRequest(BaseModel):
 
 class CompanySettings(BaseModel):
     """Schema for global company settings."""
-    hours_per_day: float = Field(..., gt=0, le=24, description="Global working hours per day")
-    hours_per_week: float = Field(..., gt=0, description="Global working hours per week")
-    hours_per_month: float = Field(..., gt=0, description="Global working hours per month")
-    hours_per_year: float = Field(..., gt=0, description="Global working hours per year")
-    weekly_off: str = Field(..., description="Day(s) off each week (e.g., 'Sunday')")
+    hours_per_day: float = Field(default=8.0, gt=0, le=24, description="Global working hours per day")
+    hours_per_week: float = Field(default=40.0, gt=0, description="Global working hours per week")
+    hours_per_month: float = Field(default=160.0, gt=0, description="Global working hours per month")
+    hours_per_year: float = Field(default=1920.0, gt=0, description="Global working hours per year")
+    weekly_off: str = Field(default="Sunday", description="Day(s) off each week (e.g., 'Sunday')")
 
 class CheckUserRequest(BaseModel):
     """Schema to check if a user exists by email or phone."""
