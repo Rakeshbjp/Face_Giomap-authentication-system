@@ -91,7 +91,6 @@ const AdminPage = () => {
 
     setIsSaving(true);
     try {
-      // Create a temporary object to hold the settings we want to pass
       const settingsPayload = {
         hours_per_day: hrsD,
         hours_per_week: hrsW,
@@ -100,18 +99,7 @@ const AdminPage = () => {
         weekly_off: settings.weekly_off.trim()
       };
       
-      await updateCompanySettings(hrsD, settings.weekly_off.trim(), {
-        // Note: the backend accepts the whole settings object now
-      });
-      // Fallback manual API call if the service doesn't support the extra fields directly yet
-      await fetch('/api/auth/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-        },
-        body: JSON.stringify(settingsPayload)
-      });
+      await updateCompanySettings(settingsPayload);
 
       toast.success("Global company settings updated! All employees have been updated.");
     } catch (err) {

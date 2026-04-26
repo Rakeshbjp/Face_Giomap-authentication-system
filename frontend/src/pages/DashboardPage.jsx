@@ -20,7 +20,13 @@ const DashboardPage = () => {
   const hasFaceData = user?.has_face_data ?? user?.liveness_verified ?? false;
 
   // Admin Settings State
-  const [adminSettings, setAdminSettings] = useState({ hours_per_day: 8.0, weekly_off: 'Sunday' });
+  const [adminSettings, setAdminSettings] = useState({ 
+    hours_per_day: 8.0, 
+    hours_per_week: 40.0,
+    hours_per_month: 160.0,
+    hours_per_year: 1920.0,
+    weekly_off: 'Sunday' 
+  });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   useEffect(() => {
@@ -29,6 +35,9 @@ const DashboardPage = () => {
         if (res?.data) {
           setAdminSettings({
             hours_per_day: res.data.hours_per_day || 8.0,
+            hours_per_week: res.data.hours_per_week || 40.0,
+            hours_per_month: res.data.hours_per_month || 160.0,
+            hours_per_year: res.data.hours_per_year || 1920.0,
             weekly_off: res.data.weekly_off || 'Sunday'
           });
         }
@@ -39,7 +48,13 @@ const DashboardPage = () => {
   const handleSaveSettings = async () => {
     try {
       setIsSavingSettings(true);
-      await updateCompanySettings(parseFloat(adminSettings.hours_per_day), adminSettings.weekly_off);
+      await updateCompanySettings({
+        hours_per_day: parseFloat(adminSettings.hours_per_day),
+        hours_per_week: parseFloat(adminSettings.hours_per_week),
+        hours_per_month: parseFloat(adminSettings.hours_per_month),
+        hours_per_year: parseFloat(adminSettings.hours_per_year),
+        weekly_off: adminSettings.weekly_off
+      });
       toast.success("Global company settings updated successfully! All employees have been updated.");
     } catch (err) {
       toast.error(err.message || "Failed to update settings");

@@ -153,9 +153,9 @@ export const getCompanySettings = async () => {
   return response.data;
 };
 
-export const updateCompanySettings = async (hours_per_day, weekly_off) => {
+export const updateCompanySettings = async (settings) => {
   try {
-    const response = await api.post('/auth/settings', { hours_per_day, weekly_off });
+    const response = await api.post('/auth/settings', settings);
     return response.data;
   } catch (err) {
     const detail = err.response?.data?.detail;
