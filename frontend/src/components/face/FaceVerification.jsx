@@ -22,6 +22,7 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
   const { videoRef, isActive, error, startCamera, stopCamera, captureImage } = useCamera({ autoStart: true });
   const [status, setStatus] = useState('idle'); // idle | scanning | verified | failed
   const [message, setMessage] = useState('');
+  const [isWakingServer, setIsWakingServer] = useState(false);
   const [confidence, setConfidence] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
   const [autoScanEnabled, setAutoScanEnabled] = useState(true);
@@ -58,6 +59,14 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
     isScanningRef.current = true;
     setStatus('scanning');
     setShowPopup(false);
+    setIsWakingServer(false);
+
+    // Setup a timer to show "waking server" message if it takes more than 5 seconds
+    const slowServerTimer = setTimeout(() => {
+      if (mountedRef.current && isScanningRef.current) {
+        setIsWakingServer(true);
+      }
+    }, 5000);
 
     // ── Frame 2: Challenge frame captured ~400ms later ──
     // A real face will have natural micro-movements between frames.
@@ -81,7 +90,9 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
     try {
       const result = await verifyFn(userId, image, challengeFrame);
 
+      clearTimeout(slowServerTimer);
       if (!mountedRef.current) return null;
+      setIsWakingServer(false);
 
       if (result.status) {
         setStatus('verified');
@@ -101,7 +112,9 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
         return { success: false, message: result.message };
       }
     } catch (err) {
+      clearTimeout(slowServerTimer);
       if (!mountedRef.current) return null;
+      setIsWakingServer(false);
 
       setStatus('failed');
       const raw = err.response?.data?.detail;
@@ -352,7 +365,7 @@ const FaceVerification = ({ userId, onVerified, onFailed, onCancel, onSkip, veri
           {status === 'scanning' ? (
             <>
               <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-              <span>Scanning face...</span>
+              <span>{isWakingServer ? 'Waking up secure server (this may take up to a minute)...' : 'Scanning face...'}</span>
             </>
           ) : status === 'verified' ? (
             <>
